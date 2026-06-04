@@ -18,6 +18,7 @@ const AskTaskSchema = z.object({
   prompt: z.string().min(1),
   mode: ModeSchema.optional(),
   worktree: WorktreeSchema.optional(),
+  effort: z.string().trim().min(1).optional(),
   title: z.string().min(1).optional(),
 });
 const CleanupSchema = z.object({
@@ -261,18 +262,19 @@ async function setupPrompt(
     '2. If the config is missing, create it. If it is loaded, patch it instead of overwriting unrelated existing agents.',
     '3. Each key in `agents` becomes an MCP tool named `ask_<key>`. Use memorable aliases such as gemini, claude, codex, deepseek, or kimi.',
     '4. For each helper, set `runner` to one of claude, gemini, codex, or opencode. Use `model` for the model/provider id; do not put model flags in `extraArgs`.',
-    '5. Use `reasoningEffort` for common effort controls. Sidekick maps it to Claude `--effort`, Codex `--config model_reasoning_effort=...`, and OpenCode `--variant`. Gemini CLI has no direct reasoning-effort flag.',
-    '6. Use `extraArgs` for other advanced CLI/model options such as thinking budgets, provider-specific flags, or approval tuning.',
-    '7. Gemini automatically gets `--skip-trust` from Sidekick. Only add Gemini `extraArgs` for extra behavior beyond that default.',
-    '8. Ask tools run in the MCP client project root when the client supports roots; otherwise they use the MCP server launch directory.',
-    '9. Read-only investigations usually do not need a worktree; call ask tools with `mode: "read-only"` and omit `worktree` to use the selected project directory without creating a worktree.',
-    '10. For edit or full-access tasks, prefer `worktree: "auto"` so helper agents work in an isolated worktree and avoid concurrent edits to the main checkout.',
-    '11. Codex model hints come from local `codex debug models --bundled`; OpenCode model hints come from local `opencode models`. Gemini and Claude use Sidekick built-in CLI aliases/candidates.',
-    '12. Do not describe modelHints as account-entitled models. They are local catalog entries, provider-layer discoveries, or built-in candidates until a real model call validates them.',
-    '13. Create or update the Sidekick home directory and config file:',
+    '5. Use config `reasoningEffort` for default effort controls. Ask tools also accept an `effort` argument to override it for one call.',
+    '6. Sidekick maps effort to Claude `--effort`, Codex `--config model_reasoning_effort=...`, and OpenCode `--variant`. Gemini CLI has no direct reasoning-effort flag.',
+    '7. Use `extraArgs` for other advanced CLI/model options such as thinking budgets, provider-specific flags, or approval tuning.',
+    '8. Gemini automatically gets `--skip-trust` from Sidekick. Only add Gemini `extraArgs` for extra behavior beyond that default.',
+    '9. Ask tools run in the MCP client project root when the client supports roots; otherwise they use the MCP server launch directory.',
+    '10. Read-only investigations usually do not need a worktree; call ask tools with `mode: "read-only"` and omit `worktree` to use the selected project directory without creating a worktree.',
+    '11. For edit or full-access tasks, prefer `worktree: "auto"` so helper agents work in an isolated worktree and avoid concurrent edits to the main checkout.',
+    '12. Codex model hints come from local `codex debug models --bundled`; OpenCode model hints come from local `opencode models`. Gemini and Claude use Sidekick built-in CLI aliases/candidates.',
+    '13. Do not describe modelHints as account-entitled models. They are local catalog entries, provider-layer discoveries, or built-in candidates until a real model call validates them.',
+    '14. Create or update the Sidekick home directory and config file:',
     `   mkdir -p ${config.sidekickHome}`,
     `   write JSON to ${config.configPath}`,
-    '14. Use this recommended starter config as a base, then adjust aliases, models, reasoningEffort, and extraArgs to match the user request:',
+    '15. Use this recommended starter config as a base, then adjust aliases, models, reasoningEffort, and extraArgs to match the user request:',
     '',
     jsonText(buildRecommendedConfig(runnerDiscovery)),
   ].join('\n');
@@ -296,6 +298,7 @@ function askToolDescription(agentName: string, agentConfig: AgentConfig): string
     'It runs in the MCP client project root when roots are available, or the MCP server launch directory otherwise.',
     'Use mode "read-only" for analysis; read-only calls default to worktree "off".',
     'For edit or full-access work, prefer worktree "auto" to avoid concurrent edits in the main checkout.',
+    'Use effort to override this agent\'s configured reasoning effort for one call where the runner supports it.',
   ].join(' ');
 }
 
@@ -305,6 +308,7 @@ function askPromptDescription(agentName: string): string {
     'Sidekick uses the MCP client project root when roots are available, or the MCP server launch directory otherwise.',
     'Use read-only mode for investigation and review; it does not create a worktree unless worktree is explicitly set.',
     'Use edit/full-access mode with worktree auto for implementation work so concurrent helper edits stay isolated.',
+    'Use the effort argument to override the configured reasoning effort for this one call where supported.',
   ].join(' ');
 }
 
@@ -330,6 +334,9 @@ function createAskTool(
       const executionContext: ToolExecutionContext = { ...context, taskId };
       const mode = resolveMode(config, parsed.mode);
       const worktreeMode = resolveWorktree(config, mode, parsed.worktree);
+      const effectiveAgentConfig = parsed.effort
+        ? { ...agentConfig, reasoningEffort: parsed.effort }
+        : agentConfig;
       const model = agentConfig.model ?? '';
       const baseCwd = executionContext.cwd ?? process.cwd();
 
@@ -354,7 +361,7 @@ function createAskTool(
         worktree,
       });
 
-      const progressRenderer = createCliProgressRenderer(agentConfig.runner);
+      const progressRenderer = createCliProgressRenderer(effectiveAgentConfig.runner);
       let capturedStdout = '';
       const progress = (chunk: string) => {
         capturedStdout += chunk;
@@ -365,15 +372,15 @@ function createAskTool(
       };
 
       try {
-        const runner = getRunner(agentConfig.runner);
+        const runner = getRunner(effectiveAgentConfig.runner);
         const result = await runner.run({
-          agent: agentConfig.runner,
+          agent: effectiveAgentConfig.runner,
           model,
           prompt: parsed.prompt,
           mode,
           cwd: worktree.cwd,
           env: executionContext.env,
-          agentConfig,
+          agentConfig: effectiveAgentConfig,
           worktree,
           context: {
             ...executionContext,
@@ -391,7 +398,7 @@ function createAskTool(
         for (const message of progressRenderer.flush()) {
           executionContext.onProgress?.(message);
         }
-        const extracted = extractRunOutput(agentConfig.runner, result.stdout);
+        const extracted = extractRunOutput(effectiveAgentConfig.runner, result.stdout);
         await metadataStore.update(taskId, {
           status: 'completed',
           exitCode: result.exitCode,
@@ -401,8 +408,9 @@ function createAskTool(
           taskId,
           status: 'completed',
           agent: agentName,
-          runner: agentConfig.runner,
+          runner: effectiveAgentConfig.runner,
           model: model || '(cli default)',
+          ...(effectiveAgentConfig.reasoningEffort ? { effort: effectiveAgentConfig.reasoningEffort } : {}),
           mode,
           worktree,
           logs: {
@@ -496,6 +504,7 @@ export function createSidekickTools(
         agents,
         guidance: [
           'Use ask_<agent> tools directly; the tool name already selects the configured runner, model, and extraArgs.',
+          'Pass `effort` on an ask_<agent> call to override the configured reasoning effort for that one run.',
           'Use mode "read-only" for analysis. Read-only calls default to worktree "off".',
           'Use mode "edit" or "full-access" with worktree "auto" for implementation to avoid concurrent edits.',
           'Codex model hints come from local `codex debug models --bundled`; OpenCode model hints come from local `opencode models` without `--refresh`.',

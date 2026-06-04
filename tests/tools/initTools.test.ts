@@ -135,6 +135,7 @@ describe('initTools', () => {
     const cleanup = definitions.find((tool) => tool.name === 'cleanup_worktree');
 
     expect(askDeepseek?.execution).toEqual({ taskSupport: 'optional' });
+    expect(JSON.stringify(askDeepseek?.inputSchema)).toContain('"effort"');
     expect(askDeepseek?.annotations).toEqual({
       readOnlyHint: false,
       destructiveHint: false,

@@ -197,6 +197,29 @@ describe('serverApp', () => {
     expect(executeCommand).toHaveBeenCalled();
   });
 
+  it('lets ask tool calls override reasoning effort for one run', async () => {
+    ({ app, client, config } = await createConnectedPair());
+    vi.mocked(executeCommand).mockResolvedValue('effort response');
+
+    const result = await client.callTool(
+      {
+        name: 'ask_claude',
+        arguments: { prompt: 'hello', effort: 'xhigh', worktree: 'off' },
+      },
+      CallToolResultSchema,
+    );
+
+    expect(result.isError).toBe(false);
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.effort).toBe('xhigh');
+    expect(parsed.answer).toBe('effort response');
+    expect(executeCommand).toHaveBeenCalledWith(
+      'claude',
+      expect.arrayContaining(['--effort', 'xhigh']),
+      expect.any(Object),
+    );
+  });
+
   it('keeps progress values monotonic for long direct ask calls', async () => {
     const progressConfig = createConfig();
     progressConfig.progressThrottleMs = 0;

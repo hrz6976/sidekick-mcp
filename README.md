@@ -10,6 +10,8 @@ Sidekick is a task-based MCP server for asking configured local coding agents to
 
 ## Install
 
+You can run Sidekick directly with `npx`; global installation is optional.
+
 ```bash
 npm install -g @hrz6976/sidekick-mcp
 ```
@@ -24,6 +26,76 @@ Equivalent npx command:
 
 ```bash
 npx -y @hrz6976/sidekick-mcp@latest
+```
+
+## MCP Client Setup
+
+Use the same stdio command everywhere:
+
+```bash
+npx -y @hrz6976/sidekick-mcp@latest
+```
+
+After adding the server, call `setup` from the client. Sidekick will inspect local Claude, Gemini, Codex, and OpenCode availability and return a prompt for creating or updating `~/.sidekick/config.json`.
+
+Some clients namespace tools by MCP server name, so `setup` may appear as `sidekick_setup`, `ask_gemini` as `sidekick_ask_gemini`, and so on.
+
+### Claude Code
+
+```bash
+claude mcp add --scope user sidekick -- npx -y @hrz6976/sidekick-mcp@latest
+claude mcp list
+```
+
+Use `--scope project` instead of `--scope user` if you want the server only for the current repository.
+
+### Gemini CLI
+
+```bash
+gemini mcp add --scope user sidekick npx -y @hrz6976/sidekick-mcp@latest
+gemini mcp list
+```
+
+Gemini CLI defaults `mcp add` to project scope, so pass `--scope user` when you want Sidekick available across repositories. If you want Gemini to skip tool-call confirmation for this trusted local server, add `--trust`.
+
+### Codex CLI
+
+```bash
+codex mcp add sidekick -- npx -y @hrz6976/sidekick-mcp@latest
+codex mcp list
+```
+
+Manual equivalent in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.sidekick]
+command = "npx"
+args = ["-y", "@hrz6976/sidekick-mcp@latest"]
+startup_timeout_sec = 20
+tool_timeout_sec = 300
+```
+
+### OpenCode
+
+OpenCode's `opencode mcp add` flow is interactive. For a reproducible setup, merge this into `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "mcp": {
+    "sidekick": {
+      "type": "local",
+      "command": ["npx", "-y", "@hrz6976/sidekick-mcp@latest"],
+      "enabled": true,
+      "timeout": 300000
+    }
+  }
+}
+```
+
+Then run:
+
+```bash
+opencode mcp list
 ```
 
 ## Configure
@@ -60,9 +132,9 @@ Sidekick reads JSON config from `~/.sidekick/config.json` by default. Override i
 }
 ```
 
-Each key under `agents` becomes a tool named `ask_<key>`. The `runner` field selects the underlying CLI: `claude`, `gemini`, `codex`, or `opencode`. Keep model/provider ids in `model`; use `reasoningEffort` for common effort levels and `extraArgs` for other advanced CLI options such as thinking budget, approval behavior, or provider-specific flags.
+Each key under `agents` becomes a tool named `ask_<key>`. The `runner` field selects the underlying CLI: `claude`, `gemini`, `codex`, or `opencode`. Keep model/provider ids in `model`; use config `reasoningEffort` for default effort levels and `extraArgs` for other advanced CLI options such as thinking budget, approval behavior, or provider-specific flags.
 
-`reasoningEffort` maps to Claude `--effort`, Codex `--config model_reasoning_effort=...`, and OpenCode `--variant`. Gemini CLI does not currently expose a direct headless reasoning-effort flag; use Gemini settings or `extraArgs` for provider-specific thinking configuration.
+Ask tools also accept an `effort` argument for one-off overrides, for example `{ "prompt": "review this diff", "mode": "read-only", "effort": "high" }`. Effective effort maps to Claude `--effort`, Codex `--config model_reasoning_effort=...`, and OpenCode `--variant`. Gemini CLI does not currently expose a direct headless reasoning-effort flag; use Gemini settings or `extraArgs` for provider-specific thinking configuration.
 
 Gemini gets `--skip-trust` by default from Sidekick, so it does not need to be repeated in config.
 

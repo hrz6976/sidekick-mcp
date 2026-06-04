@@ -390,6 +390,26 @@
   - `npm run test:e2e`
   - `git diff --check`
 
+## Ask Tool Effort Override
+
+- [x] Add public `effort` to generated `ask_<agent>` tool schemas.
+- [x] Treat `effort` as a one-call override for config `reasoningEffort`.
+- [x] Return the effective effort in ask tool results when one is set.
+- [x] Update setup/list_agents guidance and README so calling agents use `effort` at tool-call time.
+- [x] Run focused and full verification.
+
+### Ask Tool Effort Override Review / Results
+
+- `ask_<agent>` tools now expose public `effort`; it overrides config `reasoningEffort` for that call only.
+- The effective effort is passed through existing runner mappings and included in the ask result when set.
+- Verification passed:
+  - `npm test -- tests/serverApp.test.ts tests/tools/initTools.test.ts`
+  - `npm run lint`
+  - `npm test` (14 files / 118 tests)
+  - `npm run build`
+  - `npm run test:e2e`
+  - `git diff --check`
+
 ### Gemini Model Discovery Research
 
 - [x] Read existing handoff notes and lessons for model-discovery constraints.
@@ -408,6 +428,27 @@
 - Source inspection showed `/model` is an interactive slash command, `--model > GEMINI_MODEL > settings.model.name > default auto`, and bundled model registries are candidates/config options rather than live account catalogs.
 - Google AI API `models.list` exists, but should be opt-in and labeled as Gemini API catalog; it does not equal Gemini CLI current-account availability.
 - Report written to `conversations/2026-06-03-agent-task-mcp/model-discovery-research/gemini-model-discovery.md`.
+
+## MCP Client Setup Docs And Push
+
+- [x] Confirm local MCP setup commands for Claude Code, Gemini CLI, Codex CLI, and OpenCode.
+- [x] Avoid pre-creating the package release tag because the release workflow creates `v${package.version}` after npm publish.
+- [x] Add README instructions using `npx -y @hrz6976/sidekick-mcp@latest`.
+- [x] Run verification before pushing.
+- [ ] Commit with required Claude, Codex, and Gemini authorship reference.
+- [ ] Push main and an appropriate non-conflicting git tag.
+
+### MCP Client Setup Docs And Push Review / Results
+
+- README now documents npx-based setup for Claude Code, Gemini CLI, Codex CLI, and OpenCode.
+- Local `package.json` / `package-lock.json` currently contain an unrelated version change from `1.5.40` to `0.1.0`; this push intentionally excludes those files so release versioning remains under the existing workflow.
+- Verification passed:
+  - `npm run lint`
+  - `npm test` (14 files / 118 tests)
+  - `npm run build`
+  - `npm run test:e2e`
+  - `git diff --check`
+- Push pending.
 
 ### OpenCode / General Model Discovery Research
 
