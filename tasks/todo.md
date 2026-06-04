@@ -437,8 +437,9 @@
 - [x] Add `.npmignore` so npm tarballs include `dist/` even though `.gitignore` ignores build output.
 - [x] Make release workflow tolerate an already-pushed version tag.
 - [x] Run verification before pushing.
-- [ ] Commit with required Claude, Codex, and Gemini authorship reference.
-- [ ] Push main and `v0.1.0`.
+- [x] Commit with required Claude, Codex, and Gemini authorship reference.
+- [x] Push main and `v0.1.0`.
+- [x] Check GitHub Actions release result.
 
 ### MCP Client Setup Docs And 0.1.0 Push Review / Results
 
@@ -453,7 +454,14 @@
   - `npm run test:e2e`
   - `git diff --check`
   - `npm pack --dry-run`
-- Push pending.
+- Pushed:
+  - `main` at `56e827d`.
+  - `v0.1.0` exists on origin and points to release commit `1bd799b`.
+- GitHub Actions `Release & Publish` run `26941634411`:
+  - tests passed on Node 20, 22, and 24.
+  - publish failed with `npm ERR! code ENEEDAUTH`.
+  - root cause: no repo secrets are configured (`gh secret list --repo hrz6976/multicli` returned no entries), so `secrets.NPM_TOKEN` is unavailable and npm cannot authenticate.
+- `@hrz6976/sidekick-mcp@0.1.0` is still not visible on npm.
 
 ### OpenCode / General Model Discovery Research
 
