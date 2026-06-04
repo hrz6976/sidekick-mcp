@@ -159,8 +159,13 @@ jobs:
 
       - name: Tag and release
         run: |
-          git tag "v${{ needs.check.outputs.version }}"
-          git push origin "v${{ needs.check.outputs.version }}"
+          TAG="v${{ needs.check.outputs.version }}"
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists; reusing it for the GitHub Release"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
 
       - name: Create GitHub Release
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8

@@ -1,6 +1,6 @@
 {
   "name": "@hrz6976/sidekick-mcp",
-  "version": "1.5.40",
+  "version": "0.1.0",
   "description": "Sidekick MCP server for launching Claude, Gemini, Codex, and OpenCode as task-based helper agents",
   "type": "module",
   "main": "dist/index.js",

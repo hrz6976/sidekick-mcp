@@ -429,25 +429,29 @@
 - Google AI API `models.list` exists, but should be opt-in and labeled as Gemini API catalog; it does not equal Gemini CLI current-account availability.
 - Report written to `conversations/2026-06-03-agent-task-mcp/model-discovery-research/gemini-model-discovery.md`.
 
-## MCP Client Setup Docs And Push
+## MCP Client Setup Docs And 0.1.0 Push
 
 - [x] Confirm local MCP setup commands for Claude Code, Gemini CLI, Codex CLI, and OpenCode.
-- [x] Avoid pre-creating the package release tag because the release workflow creates `v${package.version}` after npm publish.
 - [x] Add README instructions using `npx -y @hrz6976/sidekick-mcp@latest`.
+- [x] Reset package version to `0.1.0` for the forked/new npm package identity.
+- [x] Add `.npmignore` publish hygiene for non-`files` package consumers.
+- [x] Make release workflow tolerate an already-pushed version tag.
 - [x] Run verification before pushing.
 - [ ] Commit with required Claude, Codex, and Gemini authorship reference.
-- [ ] Push main and an appropriate non-conflicting git tag.
+- [ ] Push main and `v0.1.0`.
 
-### MCP Client Setup Docs And Push Review / Results
+### MCP Client Setup Docs And 0.1.0 Push Review / Results
 
 - README now documents npx-based setup for Claude Code, Gemini CLI, Codex CLI, and OpenCode.
-- Local `package.json` / `package-lock.json` currently contain an unrelated version change from `1.5.40` to `0.1.0`; this push intentionally excludes those files so release versioning remains under the existing workflow.
+- Package version is now `0.1.0` so the forked package starts a clean semver line instead of inheriting the old package's `1.5.x` history.
+- Release workflow now reuses an existing `v${package.version}` tag instead of failing if the tag was pushed manually before publish.
 - Verification passed:
   - `npm run lint`
   - `npm test` (14 files / 118 tests)
   - `npm run build`
   - `npm run test:e2e`
   - `git diff --check`
+  - `npm pack --dry-run`
 - Push pending.
 
 ### OpenCode / General Model Discovery Research

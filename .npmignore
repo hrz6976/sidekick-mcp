@@ -1,0 +1,16 @@
+node_modules/
+coverage/
+.cache/
+.github/
+conversations/
+tasks/
+tests/
+src/
+*.tsbuildinfo
+*.log
+.env
+.env.*
+.npmrc
+.claude
+.gemini
+.codex
