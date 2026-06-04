@@ -434,7 +434,7 @@
 - [x] Confirm local MCP setup commands for Claude Code, Gemini CLI, Codex CLI, and OpenCode.
 - [x] Add README instructions using `npx -y @hrz6976/sidekick-mcp@latest`.
 - [x] Reset package version to `0.1.0` for the forked/new npm package identity.
-- [x] Add `.npmignore` publish hygiene for non-`files` package consumers.
+- [x] Add `.npmignore` so npm tarballs include `dist/` even though `.gitignore` ignores build output.
 - [x] Make release workflow tolerate an already-pushed version tag.
 - [x] Run verification before pushing.
 - [ ] Commit with required Claude, Codex, and Gemini authorship reference.
@@ -445,6 +445,7 @@
 - README now documents npx-based setup for Claude Code, Gemini CLI, Codex CLI, and OpenCode.
 - Package version is now `0.1.0` so the forked package starts a clean semver line instead of inheriting the old package's `1.5.x` history.
 - Release workflow now reuses an existing `v${package.version}` tag instead of failing if the tag was pushed manually before publish.
+- `npm pack --dry-run` initially exposed that `dist/` was missing from the package; `.npmignore` fixes that and the dry-run now includes `dist/index.js` and the compiled module tree.
 - Verification passed:
   - `npm run lint`
   - `npm test` (14 files / 118 tests)
