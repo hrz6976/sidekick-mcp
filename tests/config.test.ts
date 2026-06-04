@@ -1,3 +1,4 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -6,66 +7,115 @@ import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
 
 describe('config', () => {
-  it('uses verbose file logging defaults with a standard log path', () => {
-    const config = loadConfig({});
+  it('uses Sidekick home and setup-only mode when config is missing', () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), 'sidekick-config-missing-'));
+    try {
+      const config = loadConfig({ SIDEKICK_HOME: home });
 
-    expect(config.transport).toBe('stdio');
-    expect(config.httpHost).toBe('127.0.0.1');
-    expect(config.httpPort).toBe(37420);
-    expect(config.httpPath).toBe('/mcp');
-    expect(config.logLevel).toBe('debug');
-    expect(config.stderrLogLevel).toBe('error');
-    expect(config.logPath).toBe(
-      path.join(os.homedir(), '.multicli', 'logs', 'multicli.log'),
-    );
-    expect(config.serviceRootDir.toLowerCase()).toContain('multicli');
-    expect(config.serviceEnvPath).toContain(config.serviceRootDir);
-    expect(config.serviceManifestPath).toBe(
-      path.join(config.serviceRootDir, 'manifest.json'),
-    );
+      expect(config.transport).toBe('stdio');
+      expect(config.sidekickHome).toBe(home);
+      expect(config.configPath).toBe(path.join(home, 'config.json'));
+      expect(config.taskRootDir).toBe(path.join(home, 'tasks'));
+      expect(config.worktreeRootDir).toBe(path.join(home, 'worktrees'));
+      expect(config.logPath).toBe(path.join(home, 'logs', 'sidekick.log'));
+      expect(config.setupRequired).toBe(true);
+      expect(config.userConfig).toBeUndefined();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
-  it('allows log path and stderr level overrides from the environment', () => {
-    const config = loadConfig({
-      MULTICLI_LOG_PATH: '/tmp/custom-multicli.log',
-      MULTICLI_LOG_LEVEL: 'info',
-      MULTICLI_STDERR_LOG_LEVEL: 'silent',
-    });
+  it('loads a JSON config from SIDEKICK_CONFIG_PATH', () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), 'sidekick-config-'));
+    const configPath = path.join(home, 'custom.json');
+    writeFileSync(configPath, JSON.stringify({
+      agents: {
+        deepseek: {
+          runner: 'opencode',
+          command: 'opencode-dev',
+          model: 'deepseek/deepseek-chat',
+          reasoningEffort: 'high',
+          extraArgs: [],
+          description: 'DeepSeek through OpenCode',
+        },
+      },
+      defaults: { mode: 'edit', worktree: 'auto' },
+    }), 'utf8');
 
-    expect(config.logPath).toBe('/tmp/custom-multicli.log');
-    expect(config.logLevel).toBe('info');
-    expect(config.stderrLogLevel).toBe('silent');
+    try {
+      const config = loadConfig({
+        SIDEKICK_HOME: home,
+        SIDEKICK_CONFIG_PATH: configPath,
+      });
+
+      expect(config.setupRequired).toBe(false);
+      expect(config.configPath).toBe(configPath);
+      expect(config.userConfig?.agents.deepseek?.runner).toBe('opencode');
+      expect(config.userConfig?.agents.deepseek?.command).toBe('opencode-dev');
+      expect(config.userConfig?.agents.deepseek?.model).toBe('deepseek/deepseek-chat');
+      expect(config.userConfig?.agents.deepseek?.reasoningEffort).toBe('high');
+      expect(config.userConfig?.agents.deepseek?.extraArgs).toEqual([]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
-  it('parses HTTP and service configuration from the environment', () => {
+  it('defaults runner aliases to matching commands', () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), 'sidekick-config-runner-'));
+    const configPath = path.join(home, 'config.json');
+    writeFileSync(configPath, JSON.stringify({
+      agents: {
+        gemini: { model: 'gemini-2.5-pro' },
+      },
+      defaults: { mode: 'read-only', worktree: 'auto' },
+    }), 'utf8');
+
+    try {
+      const config = loadConfig({
+        SIDEKICK_HOME: home,
+        SIDEKICK_CONFIG_PATH: configPath,
+      });
+
+      expect(config.setupRequired).toBe(false);
+      expect(config.userConfig?.agents.gemini?.runner).toBe('gemini');
+      expect(config.userConfig?.agents.gemini?.command).toBe('gemini');
+      expect(config.userConfig?.agents.gemini?.enabled).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('parses Sidekick HTTP and service environment overrides', () => {
     const config = loadConfig({
-      MULTICLI_TRANSPORT: 'http',
-      MULTICLI_HTTP_HOST: '127.0.0.1',
-      MULTICLI_HTTP_PORT: '40123',
-      MULTICLI_HTTP_PATH: 'custom-mcp',
-      MULTICLI_HTTP_AUTH_TOKEN: 'secret-token',
-      MULTICLI_HTTP_SESSION_IDLE_MS: '60000',
-      MULTICLI_SERVICE_ROOT_DIR: '/tmp/multicli-service',
-      MULTICLI_SERVICE_MANIFEST_PATH: '/tmp/multicli-service/custom-manifest.json',
+      SIDEKICK_TRANSPORT: 'http',
+      SIDEKICK_HTTP_PORT: '40123',
+      SIDEKICK_HTTP_PATH: 'custom-mcp',
+      SIDEKICK_HTTP_AUTH_TOKEN: 'secret-token',
+      SIDEKICK_LOG_LEVEL: 'info',
+      SIDEKICK_STDERR_LOG_LEVEL: 'silent',
+      SIDEKICK_SERVICE_ROOT_DIR: '/tmp/sidekick-service',
+      SIDEKICK_SERVICE_MANIFEST_PATH: '/tmp/sidekick-service/custom-manifest.json',
     });
 
     expect(config.transport).toBe('http');
-    expect(config.httpHost).toBe('127.0.0.1');
     expect(config.httpPort).toBe(40123);
     expect(config.httpPath).toBe('/custom-mcp');
     expect(config.httpAuthToken).toBe('secret-token');
-    expect(config.httpSessionIdleMs).toBe(60000);
-    expect(config.serviceRootDir).toBe('/tmp/multicli-service');
-    expect(config.serviceLogPath).toBe('/tmp/multicli-service/logs/service.log');
-    expect(config.serviceManifestPath).toBe('/tmp/multicli-service/custom-manifest.json');
+    expect(config.logLevel).toBe('info');
+    expect(config.stderrLogLevel).toBe('silent');
+    expect(config.serviceRootDir).toBe('/tmp/sidekick-service');
+    expect(config.serviceManifestPath).toBe('/tmp/sidekick-service/custom-manifest.json');
   });
 
-  it('accepts the legacy runtime-path env var as a manifest-path alias', () => {
+  it('does not read legacy MULTICLI environment variables', () => {
     const config = loadConfig({
-      MULTICLI_SERVICE_ROOT_DIR: '/tmp/multicli-service',
-      MULTICLI_SERVICE_RUNTIME_PATH: '/tmp/multicli-service/legacy-manifest.json',
+      MULTICLI_TRANSPORT: 'http',
+      MULTICLI_LOG_PATH: '/tmp/legacy.log',
+      MULTICLI_HTTP_AUTH_TOKEN: 'legacy-token',
     });
 
-    expect(config.serviceManifestPath).toBe('/tmp/multicli-service/legacy-manifest.json');
+    expect(config.transport).toBe('stdio');
+    expect(config.logPath).not.toBe('/tmp/legacy.log');
+    expect(config.httpAuthToken).toBeUndefined();
   });
 });

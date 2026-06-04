@@ -23,6 +23,7 @@ function makeTool(overrides: Partial<UnifiedTool> = {}): UnifiedTool {
     category: overrides.category ?? 'utility',
     prompt: overrides.prompt,
     execution: overrides.execution,
+    annotations: overrides.annotations,
   };
 }
 
@@ -55,8 +56,8 @@ describe('registry', () => {
   describe('getToolDefinitions', () => {
     it('converts zod schema to MCP Tool format', () => {
       const tool = makeTool({
-        name: 'Ask-Gemini',
-        description: 'Ask Gemini a question',
+        name: 'ask_gemini',
+        description: 'Ask Gemini',
         zodSchema: z.object({
           prompt: z.string().describe('The prompt'),
           model: z.string().describe('Model ID'),
@@ -66,8 +67,8 @@ describe('registry', () => {
 
       const defs = getToolDefinitions();
       expect(defs).toHaveLength(1);
-      expect(defs[0].name).toBe('Ask-Gemini');
-      expect(defs[0].description).toBe('Ask Gemini a question');
+      expect(defs[0].name).toBe('ask_gemini');
+      expect(defs[0].description).toBe('Ask Gemini');
       expect(defs[0].inputSchema.type).toBe('object');
       expect(defs[0].inputSchema.properties).toHaveProperty('prompt');
       expect(defs[0].inputSchema.properties).toHaveProperty('model');
@@ -75,17 +76,24 @@ describe('registry', () => {
 
     it('includes execution metadata when present', () => {
       const tool = makeTool({
-        name: 'Ask-Claude',
-        execution: { taskSupport: 'optional' },
+        name: 'ask_gemini',
+        execution: { taskSupport: 'required' },
       });
       toolRegistry.push(tool);
 
       const defs = getToolDefinitions();
-      expect(defs[0].execution).toEqual({ taskSupport: 'optional' });
+      expect(defs[0].execution).toEqual({ taskSupport: 'required' });
     });
 
-    it('adds openWorldHint annotation to Ask-* tools', () => {
-      const tool = makeTool({ name: 'Ask-Claude' });
+    it('includes explicit annotations when present', () => {
+      const tool = makeTool({
+        name: 'ask_gemini',
+        annotations: {
+          openWorldHint: true,
+          readOnlyHint: false,
+          destructiveHint: false,
+        },
+      });
       toolRegistry.push(tool);
 
       const defs = getToolDefinitions();
@@ -96,56 +104,8 @@ describe('registry', () => {
       });
     });
 
-    it('adds readOnlyHint annotation to List-* tools', () => {
-      const tool = makeTool({ name: 'List-Gemini-Models' });
-      toolRegistry.push(tool);
-
-      const defs = getToolDefinitions();
-      expect(defs[0].annotations).toEqual({
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
-      });
-    });
-
-    it('adds readOnlyHint annotation to *-Help tools', () => {
-      const tool = makeTool({ name: 'Claude-Help' });
-      toolRegistry.push(tool);
-
-      const defs = getToolDefinitions();
-      expect(defs[0].annotations).toEqual({
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
-      });
-    });
-
-    it('adds readOnlyHint annotation to Fetch-Chunk', () => {
-      const tool = makeTool({ name: 'Fetch-Chunk' });
-      toolRegistry.push(tool);
-
-      const defs = getToolDefinitions();
-      expect(defs[0].annotations).toEqual({
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
-      });
-    });
-
-    it('adds readOnlyHint annotation to Claude-Gemini-Codex fallback', () => {
-      const tool = makeTool({ name: 'Claude-Gemini-Codex' });
-      toolRegistry.push(tool);
-
-      const defs = getToolDefinitions();
-      expect(defs[0].annotations).toEqual({
-        readOnlyHint: true,
-        destructiveHint: false,
-        openWorldHint: false,
-      });
-    });
-
-    it('omits annotations for unmatched tool names', () => {
-      const tool = makeTool({ name: 'Some-Other-Tool' });
+    it('omits annotations when none are provided', () => {
+      const tool = makeTool({ name: 'list_agents' });
       toolRegistry.push(tool);
 
       const defs = getToolDefinitions();
@@ -289,20 +249,20 @@ describe('registry', () => {
   describe('getPromptMessage', () => {
     it('formats message with prompt and parameters', () => {
       const tool = makeTool({
-        name: 'Ask-Gemini',
-        prompt: { description: 'Ask Gemini' },
+        name: 'ask_gemini',
+        prompt: { description: 'Start a task' },
       });
       toolRegistry.push(tool);
 
-      const msg = getPromptMessage('Ask-Gemini', {
+      const msg = getPromptMessage('ask_gemini', {
         prompt: 'explain this',
-        model: 'gemini-2.5-flash',
+        model: 'sonnet',
         sandbox: true,
       });
 
-      expect(msg).toContain('Use the Ask-Gemini tool');
+      expect(msg).toContain('Use the ask_gemini tool');
       expect(msg).toContain('explain this');
-      expect(msg).toContain('model: gemini-2.5-flash');
+      expect(msg).toContain('model: sonnet');
       expect(msg).toContain('[sandbox]');
     });
 

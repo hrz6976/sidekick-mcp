@@ -1,18 +1,78 @@
+import os from 'node:os';
+import path from 'node:path';
+
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../src/utils/cliDetector.js', () => ({
   detectAvailableClis: vi.fn(),
 }));
 
+import type { SidekickConfig } from '../../src/config.js';
 import { initTools } from '../../src/tools/index.js';
-import { toolRegistry } from '../../src/tools/registry.js';
+import { getToolDefinitions, toolRegistry } from '../../src/tools/registry.js';
 import { detectAvailableClis } from '../../src/utils/cliDetector.js';
+
+function createConfig(overrides: Partial<SidekickConfig> = {}): SidekickConfig {
+  const home = path.join(os.tmpdir(), `sidekick-tools-${process.pid}`);
+  return {
+    transport: 'stdio',
+    cliDetectTimeoutMs: 100,
+    killGraceMs: 50,
+    taskTtlMs: 60_000,
+    taskPollIntervalMs: 5,
+    progressIdleHeartbeatMs: 25,
+    progressThrottleMs: 1,
+    httpHost: '127.0.0.1',
+    httpPort: 37420,
+    httpPath: '/mcp',
+    httpSessionIdleMs: 60_000,
+    logPath: path.join(home, 'logs', 'sidekick.log'),
+    logLevel: 'debug',
+    stderrLogLevel: 'silent',
+    sidekickHome: home,
+    configPath: path.join(home, 'config.json'),
+    taskRootDir: path.join(home, 'tasks'),
+    worktreeRootDir: path.join(home, 'worktrees'),
+    serviceRootDir: path.join(home, 'service'),
+    serviceLogPath: path.join(home, 'service', 'logs', 'service.log'),
+    serviceEnvPath: path.join(home, 'service', 'env'),
+    serviceManifestPath: path.join(home, 'service', 'manifest.json'),
+    setupRequired: false,
+    userConfig: {
+      agents: {
+        deepseek: {
+          runner: 'opencode',
+          enabled: true,
+          command: 'opencode',
+          model: 'deepseek/deepseek-chat',
+          reasoningEffort: 'high',
+          extraArgs: [],
+        },
+        gemini: {
+          runner: 'gemini',
+          enabled: true,
+          command: 'gemini',
+          model: 'gemini-2.5-pro',
+          extraArgs: [],
+        },
+      },
+      defaults: { mode: 'edit', worktree: 'auto' },
+    },
+    ...overrides,
+  };
+}
 
 describe('initTools', () => {
   let savedRegistry: typeof toolRegistry extends (infer T)[] ? T[] : never;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(detectAvailableClis).mockResolvedValue({
+      gemini: false,
+      codex: true,
+      claude: false,
+      opencode: false,
+    });
     savedRegistry = [...toolRegistry];
     toolRegistry.length = 0;
   });
@@ -22,100 +82,64 @@ describe('initTools', () => {
     toolRegistry.push(...savedRegistry);
   });
 
-  it('registers gemini tools when gemini available', async () => {
-    vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: true, codex: false, claude: false, opencode: false,
+  it('registers only setup when config is missing', async () => {
+    await initTools({
+      sidekickConfig: createConfig({ setupRequired: true, userConfig: undefined }),
+      cliDetectTimeoutMs: 100,
     });
 
-    await initTools();
-
-    const names = toolRegistry.map(t => t.name);
-    expect(names).toContain('List-Gemini-Models');
-    expect(names).toContain('Ask-Gemini');
-    expect(names).toContain('Fetch-Chunk');
-    expect(names).toContain('Gemini-Help');
-    // Should NOT have codex or claude tools
-    expect(names).not.toContain('Ask-Codex');
-    expect(names).not.toContain('Ask-Claude');
-    expect(names).not.toContain('Ask-OpenCode');
+    expect(toolRegistry.map((tool) => tool.name)).toEqual(['setup']);
+    expect(getToolDefinitions()[0].annotations).toEqual({
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false,
+    });
   });
 
-  it('registers codex tools when codex available', async () => {
+  it('registers the configured Sidekick tool surface regardless of CLI availability', async () => {
     vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false, codex: true, claude: false, opencode: false,
+      gemini: false,
+      codex: false,
+      claude: false,
+      opencode: false,
     });
 
-    await initTools();
-
-    const names = toolRegistry.map(t => t.name);
-    expect(names).toContain('List-Codex-Models');
-    expect(names).toContain('Ask-Codex');
-    expect(names).toContain('Codex-Help');
-    expect(names).not.toContain('Ask-Gemini');
-    expect(names).not.toContain('Ask-Claude');
-    expect(names).not.toContain('Ask-OpenCode');
-  });
-
-  it('registers claude tools when claude available', async () => {
-    vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false, codex: false, claude: true, opencode: false,
+    const availability = await initTools({
+      sidekickConfig: createConfig(),
+      cliDetectTimeoutMs: 100,
     });
 
-    await initTools();
-
-    const names = toolRegistry.map(t => t.name);
-    expect(names).toContain('List-Claude-Models');
-    expect(names).toContain('Ask-Claude');
-    expect(names).toContain('Claude-Help');
-    expect(names).not.toContain('Ask-Gemini');
-    expect(names).not.toContain('Ask-Codex');
-    expect(names).not.toContain('Ask-OpenCode');
+    expect(availability).toEqual({
+      gemini: false,
+      codex: false,
+      claude: false,
+      opencode: false,
+    });
+    expect(toolRegistry.map((tool) => tool.name)).toEqual([
+      'setup',
+      'ask_deepseek',
+      'ask_gemini',
+      'list_agents',
+      'cleanup_worktree',
+    ]);
   });
 
-  it('registers opencode tools when opencode available', async () => {
-    vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false, codex: false, claude: false, opencode: true,
+  it('marks ask tools task-optional and cleanup destructive', async () => {
+    await initTools({
+      sidekickConfig: createConfig(),
+      cliDetectTimeoutMs: 100,
     });
 
-    await initTools();
+    const definitions = getToolDefinitions();
+    const askDeepseek = definitions.find((tool) => tool.name === 'ask_deepseek');
+    const cleanup = definitions.find((tool) => tool.name === 'cleanup_worktree');
 
-    const names = toolRegistry.map(t => t.name);
-    expect(names).toContain('List-OpenCode-Models');
-    expect(names).toContain('Ask-OpenCode');
-    expect(names).toContain('OpenCode-Help');
-    expect(names).not.toContain('Ask-Gemini');
-    expect(names).not.toContain('Ask-Codex');
-    expect(names).not.toContain('Ask-Claude');
-  });
-
-  it('registers tools for multiple available CLIs', async () => {
-    vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: true, codex: true, claude: false, opencode: false,
+    expect(askDeepseek?.execution).toEqual({ taskSupport: 'optional' });
+    expect(askDeepseek?.annotations).toEqual({
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: true,
     });
-
-    await initTools();
-
-    const names = toolRegistry.map(t => t.name);
-    expect(names).toContain('Ask-Gemini');
-    expect(names).toContain('Ask-Codex');
-    expect(names).not.toContain('Ask-Claude');
-    expect(names).not.toContain('Ask-OpenCode');
-  });
-
-  it('registers no tools when no CLIs available', async () => {
-    vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false, codex: false, claude: false, opencode: false,
-    });
-
-    await initTools();
-    expect(toolRegistry).toHaveLength(0);
-  });
-
-  it('returns availability object', async () => {
-    const expected = { gemini: true, codex: false, claude: true, opencode: false };
-    vi.mocked(detectAvailableClis).mockResolvedValue(expected);
-
-    const result = await initTools();
-    expect(result).toEqual(expected);
+    expect(cleanup?.annotations?.destructiveHint).toBe(true);
   });
 });

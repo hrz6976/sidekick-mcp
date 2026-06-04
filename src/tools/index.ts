@@ -1,65 +1,26 @@
-// Tool Registry Index - Registers tools based on CLI availability
-import { toolRegistry } from './registry.js';
-import { askGeminiTool } from './ask-gemini.tool.js';
-import {
-  geminiHelpTool, codexHelpTool, claudeHelpTool, opencodeHelpTool,
-  geminiListModelsTool, codexListModelsTool, claudeListModelsTool, opencodeListModelsTool,
-} from './simple-tools.js';
-import { fetchChunkTool } from './fetch-chunk.tool.js';
-import { askCodexTool } from './ask-codex.tool.js';
-import { askClaudeTool } from './ask-claude.tool.js';
-import { askOpencodeTool } from './ask-opencode.tool.js';
-import { detectAvailableClis, CliAvailability } from '../utils/cliDetector.js';
-import { MultiCliConfig } from '../config.js';
+// Tool Registry Index - registers the Sidekick public tool surface.
+import type { SidekickConfig } from '../config.js';
 import type { Logger } from '../logger.js';
+import { detectAvailableClis, type CliAvailability } from '../utils/cliDetector.js';
+import { toolRegistry } from './registry.js';
+import { createSidekickTools } from './sidekick.js';
 
-/**
- * Initialize the tool registry based on which CLIs are available.
- * Must be called (and awaited) before the server starts accepting requests.
- */
 export async function initTools(
-  config?: Pick<MultiCliConfig, 'cliDetectTimeoutMs'> & { logger?: Logger },
+  config: Pick<SidekickConfig, 'cliDetectTimeoutMs'> & {
+    logger?: Logger;
+    sidekickConfig: SidekickConfig;
+  },
 ): Promise<CliAvailability> {
   toolRegistry.length = 0;
   const availability = await detectAvailableClis(
-    config?.cliDetectTimeoutMs,
-    config?.logger,
+    config.cliDetectTimeoutMs,
+    config.logger,
   );
 
-  if (availability.gemini) {
-    toolRegistry.push(
-      geminiListModelsTool,   // List-Gemini-Models
-      askGeminiTool,          // Ask-Gemini
-      fetchChunkTool,         // Fetch-Chunk
-      geminiHelpTool,         // Gemini-Help
-    );
-  }
+  toolRegistry.push(...createSidekickTools(config.sidekickConfig, availability));
 
-  if (availability.codex) {
-    toolRegistry.push(
-      codexListModelsTool,    // List-Codex-Models
-      askCodexTool,           // Ask-Codex
-      codexHelpTool,          // Codex-Help
-    );
-  }
-
-  if (availability.claude) {
-    toolRegistry.push(
-      claudeListModelsTool,   // List-Claude-Models
-      askClaudeTool,          // Ask-Claude
-      claudeHelpTool,         // Claude-Help
-    );
-  }
-
-  if (availability.opencode) {
-    toolRegistry.push(
-      opencodeListModelsTool, // List-OpenCode-Models
-      askOpencodeTool,        // Ask-OpenCode
-      opencodeHelpTool,       // OpenCode-Help
-    );
-  }
-
-  config?.logger?.info('tool_registry_initialized', {
+  config.logger?.info('sidekick_tool_registry_initialized', {
+    setupRequired: config.sidekickConfig.setupRequired,
     availability,
     toolNames: toolRegistry.map((tool) => tool.name),
   });

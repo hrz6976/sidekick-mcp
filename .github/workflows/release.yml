@@ -37,7 +37,7 @@ jobs:
           CURRENT=$(node -p "require('./package.json').version")
 
           # Check if this version is already published to npm
-          if npm view "@osanoai/multicli@$CURRENT" version >/dev/null 2>&1; then
+          if npm view "@hrz6976/sidekick-mcp@$CURRENT" version >/dev/null 2>&1; then
             echo "action=bump" >> $GITHUB_OUTPUT
             echo "Version $CURRENT already on npm — will create bump PR"
           else
@@ -103,21 +103,12 @@ jobs:
             --head "$BRANCH"
           gh pr merge --auto --squash
 
-  # ── PUBLISH PATH: new version → scan, test, publish ────────────────────
-
-  scan:
-    name: Security Scan
-    needs: check
-    if: needs.check.outputs.action == 'publish'
-    uses: ./.github/workflows/scan.yml
-    permissions:
-      security-events: write
-      contents: read
-      actions: read
+  # ── PUBLISH PATH: new version → test, publish ──────────────────────────
 
   test:
     name: Tests
-    needs: scan
+    needs: check
+    if: needs.check.outputs.action == 'publish'
     uses: ./.github/workflows/tests.yml
 
   publish:
@@ -162,6 +153,8 @@ jobs:
         run: npm run build
 
       - name: Publish to npm with provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public
 
       - name: Tag and release

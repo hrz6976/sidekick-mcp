@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 
-import { MultiCliLogLevel, MultiCliStderrLogLevel } from './config.js';
+import { SidekickLogLevel, SidekickStderrLogLevel } from './config.js';
 
-const LEVEL_PRIORITY: Record<MultiCliLogLevel, number> = {
+const LEVEL_PRIORITY: Record<SidekickLogLevel, number> = {
   error: 0,
   info: 1,
   debug: 2,
@@ -14,8 +14,8 @@ const MAX_LOG_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const MAX_LOG_BACKUPS = 5;
 
 function shouldWrite(
-  currentLevel: MultiCliLogLevel,
-  minimumLevel: MultiCliLogLevel | MultiCliStderrLogLevel,
+  currentLevel: SidekickLogLevel,
+  minimumLevel: SidekickLogLevel | SidekickStderrLogLevel,
 ): boolean {
   if (minimumLevel === 'silent') {
     return false;
@@ -137,8 +137,8 @@ export interface Logger {
 
 interface LoggerOptions {
   filePath: string;
-  fileLevel: MultiCliLogLevel;
-  stderrLevel?: MultiCliStderrLogLevel;
+  fileLevel: SidekickLogLevel;
+  stderrLevel?: SidekickStderrLogLevel;
   sessionId?: string;
   bindings?: Record<string, unknown>;
 }
@@ -179,7 +179,7 @@ class StructuredLogger implements Logger {
   }
 
   private write(
-    level: MultiCliLogLevel,
+    level: SidekickLogLevel,
     event: string,
     meta?: Record<string, unknown>,
   ): void {
@@ -197,6 +197,7 @@ class StructuredLogger implements Logger {
 
     try {
       if (shouldWrite(level, this.options.fileLevel)) {
+        mkdirSync(path.dirname(this.logPath), { recursive: true });
         rotateLogsIfNeeded(this.logPath);
         appendFileSync(this.logPath, line, 'utf8');
       }

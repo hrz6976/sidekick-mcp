@@ -1,12 +1,12 @@
 import os from 'node:os';
 import path from 'node:path';
 
-import type { MultiCliConfig } from '../config.js';
+import type { SidekickConfig } from '../config.js';
 import type { ServiceKind, ServicePaths } from './types.js';
 
-export const SERVICE_LABEL = 'com.osanoai.multicli';
-export const SYSTEMD_UNIT_NAME = 'multicli.service';
-export const WINDOWS_TASK_NAME = 'MultiCLI';
+export const SERVICE_LABEL = 'com.hrz6976.sidekick';
+export const SYSTEMD_UNIT_NAME = 'sidekick.service';
+export const WINDOWS_TASK_NAME = 'SidekickMCP';
 
 export function getServiceKind(
   platform: NodeJS.Platform = process.platform,
@@ -22,7 +22,7 @@ export function getServiceKind(
 }
 
 export function getServicePaths(
-  config: MultiCliConfig,
+  config: SidekickConfig,
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
 ): ServicePaths {
@@ -34,7 +34,7 @@ export function getServicePaths(
         root,
         manifest: config.serviceManifestPath,
         envFile: config.serviceEnvPath,
-        launcher: path.join(root, 'Multi-CLI.sh'),
+        launcher: path.join(root, 'sidekick.sh'),
         serviceDefinition: path.join(
           os.homedir(),
           'Library',

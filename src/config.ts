@@ -1,34 +1,35 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export type MultiCliLogLevel = 'error' | 'info' | 'debug';
-export type MultiCliStderrLogLevel = MultiCliLogLevel | 'silent';
-export type MultiCliTransport = 'stdio' | 'http';
+export type SidekickLogLevel = 'error' | 'info' | 'debug';
+export type SidekickStderrLogLevel = SidekickLogLevel | 'silent';
+type SidekickTransport = 'stdio' | 'http';
+export type RunnerName = 'claude' | 'gemini' | 'codex' | 'opencode';
+export type SidekickMode = 'read-only' | 'edit' | 'full-access';
+export type WorktreeMode = 'auto' | 'off';
 
-function getDefaultServiceRootDir(
-  platform: NodeJS.Platform = process.platform,
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  switch (platform) {
-    case 'darwin':
-      return path.join(os.homedir(), 'Library', 'Application Support', 'MultiCLI');
-    case 'win32':
-      return path.join(
-        env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'),
-        'MultiCLI',
-      );
-    default:
-      return path.join(
-        env.XDG_CONFIG_HOME ?? path.join(os.homedir(), '.config'),
-        'multicli',
-      );
-  }
+export interface AgentConfig {
+  runner: RunnerName;
+  enabled: boolean;
+  command: string;
+  model?: string;
+  reasoningEffort?: string;
+  extraArgs: string[];
+  models?: string[];
+  description?: string;
 }
 
-export interface MultiCliConfig {
-  transport: MultiCliTransport;
-  askTimeoutMs: number;
-  helpTimeoutMs: number;
+interface SidekickUserConfig {
+  agents: Record<string, AgentConfig>;
+  defaults: {
+    mode: SidekickMode;
+    worktree: WorktreeMode;
+  };
+}
+
+export interface SidekickConfig {
+  transport: SidekickTransport;
   cliDetectTimeoutMs: number;
   killGraceMs: number;
   taskTtlMs: number;
@@ -41,104 +42,53 @@ export interface MultiCliConfig {
   httpAuthToken?: string;
   httpSessionIdleMs: number;
   logPath: string;
-  logLevel: MultiCliLogLevel;
-  stderrLogLevel: MultiCliStderrLogLevel;
+  logLevel: SidekickLogLevel;
+  stderrLogLevel: SidekickStderrLogLevel;
+  sidekickHome: string;
+  configPath: string;
+  taskRootDir: string;
+  worktreeRootDir: string;
   serviceRootDir: string;
   serviceLogPath: string;
   serviceEnvPath: string;
   serviceManifestPath: string;
+  setupRequired: boolean;
+  configError?: string;
+  userConfig?: SidekickUserConfig;
 }
 
-const DEFAULTS: MultiCliConfig = {
-  transport: 'stdio',
-  askTimeoutMs: 15 * 60 * 1000,
-  helpTimeoutMs: 30 * 1000,
-  cliDetectTimeoutMs: 5 * 1000,
-  killGraceMs: 5 * 1000,
-  taskTtlMs: 60 * 60 * 1000,
-  taskPollIntervalMs: 1000,
-  progressIdleHeartbeatMs: 10 * 1000,
-  progressThrottleMs: 1000,
-  httpHost: '127.0.0.1',
-  httpPort: 37420,
-  httpPath: '/mcp',
-  httpAuthToken: undefined,
-  httpSessionIdleMs: 30 * 60 * 1000,
-  logPath: path.join(os.homedir(), '.multicli', 'logs', 'multicli.log'),
-  logLevel: 'debug',
-  stderrLogLevel: 'error',
-  serviceRootDir: getDefaultServiceRootDir(),
-  serviceLogPath: path.join(getDefaultServiceRootDir(), 'logs', 'service.log'),
-  serviceEnvPath: path.join(getDefaultServiceRootDir(), 'env'),
-  serviceManifestPath: path.join(getDefaultServiceRootDir(), 'manifest.json'),
-};
+const RUNNER_NAMES: RunnerName[] = ['claude', 'gemini', 'codex', 'opencode'];
 
-function parsePositiveInt(
-  value: string | undefined,
-  fallback: number,
-): number {
+function getDefaultSidekickHome(): string {
+  return path.join(os.homedir(), '.sidekick');
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
-
   const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback;
-  }
-
-  return parsed;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function parseLogLevel(
-  value: string | undefined,
-  fallback: MultiCliLogLevel,
-): MultiCliLogLevel {
-  switch (value) {
-    case 'error':
-    case 'info':
-    case 'debug':
-      return value;
-    default:
-      return fallback;
-  }
+function parseString(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  return trimmed || fallback;
 }
 
-function parseTransport(
-  value: string | undefined,
-  fallback: MultiCliTransport,
-): MultiCliTransport {
-  switch (value) {
-    case 'stdio':
-    case 'http':
-      return value;
-    default:
-      return fallback;
-  }
+function parseTransport(value: string | undefined): SidekickTransport {
+  return value === 'http' ? 'http' : 'stdio';
+}
+
+function parseLogLevel(value: string | undefined, fallback: SidekickLogLevel): SidekickLogLevel {
+  return value === 'error' || value === 'info' || value === 'debug' ? value : fallback;
 }
 
 function parseStderrLogLevel(
   value: string | undefined,
-  fallback: MultiCliStderrLogLevel,
-): MultiCliStderrLogLevel {
-  switch (value) {
-    case 'error':
-    case 'info':
-    case 'debug':
-    case 'silent':
-      return value;
-    default:
-      return fallback;
-  }
-}
-
-function parseString(
-  value: string | undefined,
-  fallback: string,
-): string {
-  if (!value) {
-    return fallback;
-  }
-
-  const trimmed = value.trim();
-  return trimmed || fallback;
+  fallback: SidekickStderrLogLevel,
+): SidekickStderrLogLevel {
+  return value === 'error' || value === 'info' || value === 'debug' || value === 'silent'
+    ? value
+    : fallback;
 }
 
 function normalizeHttpPath(value: string | undefined, fallback: string): string {
@@ -146,54 +96,173 @@ function normalizeHttpPath(value: string | undefined, fallback: string): string 
   return parsed.startsWith('/') ? parsed : `/${parsed}`;
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): MultiCliConfig {
+function isRunnerName(value: unknown): value is RunnerName {
+  return typeof value === 'string' && RUNNER_NAMES.includes(value as RunnerName);
+}
+
+function isMode(value: unknown): value is SidekickMode {
+  return value === 'read-only' || value === 'edit' || value === 'full-access';
+}
+
+function isWorktreeMode(value: unknown): value is WorktreeMode {
+  return value === 'auto' || value === 'off';
+}
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+function isAgentAlias(value: string): boolean {
+  return /^[a-z][a-z0-9_]{0,63}$/.test(value);
+}
+
+function parseAgentConfig(alias: string, raw: unknown): AgentConfig {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error(`Sidekick config field "agents.${alias}" must be an object.`);
+  }
+
+  const record = raw as Record<string, unknown>;
+  const runner = isRunnerName(record.runner)
+    ? record.runner
+    : isRunnerName(alias)
+      ? alias
+      : undefined;
+  if (!runner) {
+    throw new Error(
+      `Sidekick config field "agents.${alias}.runner" must be one of claude, gemini, codex, opencode.`,
+    );
+  }
+
+  return {
+    runner,
+    enabled: record.enabled !== false,
+    command: typeof record.command === 'string' && record.command.trim()
+      ? record.command.trim()
+      : runner,
+    model: typeof record.model === 'string' && record.model.trim()
+      ? record.model.trim()
+      : undefined,
+    reasoningEffort: typeof record.reasoningEffort === 'string' && record.reasoningEffort.trim()
+      ? record.reasoningEffort.trim()
+      : undefined,
+    extraArgs: parseStringArray(record.extraArgs),
+    models: parseStringArray(record.models),
+    description: typeof record.description === 'string' && record.description.trim()
+      ? record.description.trim()
+      : undefined,
+  };
+}
+
+function parseSidekickUserConfig(raw: unknown): SidekickUserConfig {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Sidekick config must be a JSON object.');
+  }
+
+  const record = raw as Record<string, unknown>;
+  const rawDefaults = record.defaults && typeof record.defaults === 'object'
+    ? record.defaults as Record<string, unknown>
+    : {};
+  const rawAgents = record.agents && typeof record.agents === 'object'
+    ? record.agents as Record<string, unknown>
+    : undefined;
+  if (!rawAgents) {
+    throw new Error('Sidekick config field "agents" must be an object.');
+  }
+
+  const agents: Record<string, AgentConfig> = {};
+  for (const [alias, rawAgentConfig] of Object.entries(rawAgents)) {
+    if (!isAgentAlias(alias)) {
+      throw new Error(
+        `Sidekick agent name "${alias}" is invalid. Use snake_case names matching [a-z][a-z0-9_]{0,63}.`,
+      );
+    }
+    agents[alias] = parseAgentConfig(alias, rawAgentConfig);
+  }
+  if (Object.keys(agents).length === 0) {
+    throw new Error('Sidekick config field "agents" must define at least one agent.');
+  }
+
+  return {
+    agents,
+    defaults: {
+      mode: isMode(rawDefaults.mode) ? rawDefaults.mode : 'edit',
+      worktree: isWorktreeMode(rawDefaults.worktree) ? rawDefaults.worktree : 'auto',
+    },
+  };
+}
+
+function readUserConfig(configPath: string): {
+  setupRequired: boolean;
+  userConfig?: SidekickUserConfig;
+  configError?: string;
+} {
+  if (!fs.existsSync(configPath)) {
+    return { setupRequired: true };
+  }
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(configPath, 'utf8')) as unknown;
+    return {
+      setupRequired: false,
+      userConfig: parseSidekickUserConfig(raw),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      setupRequired: true,
+      configError: `Could not load Sidekick config at ${configPath}: ${message}`,
+    };
+  }
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): SidekickConfig {
+  const sidekickHome = parseString(env.SIDEKICK_HOME, getDefaultSidekickHome());
+  const configPath = parseString(
+    env.SIDEKICK_CONFIG_PATH,
+    path.join(sidekickHome, 'config.json'),
+  );
+  const userConfigState = readUserConfig(configPath);
   const serviceRootDir = parseString(
-    env.MULTICLI_SERVICE_ROOT_DIR,
-    DEFAULTS.serviceRootDir,
+    env.SIDEKICK_SERVICE_ROOT_DIR,
+    path.join(sidekickHome, 'service'),
   );
 
   return {
-    transport: parseTransport(env.MULTICLI_TRANSPORT, DEFAULTS.transport),
-    askTimeoutMs: parsePositiveInt(env.MULTICLI_ASK_TIMEOUT_MS, DEFAULTS.askTimeoutMs),
-    helpTimeoutMs: parsePositiveInt(env.MULTICLI_HELP_TIMEOUT_MS, DEFAULTS.helpTimeoutMs),
-    cliDetectTimeoutMs: parsePositiveInt(env.MULTICLI_CLI_DETECT_TIMEOUT_MS, DEFAULTS.cliDetectTimeoutMs),
-    killGraceMs: parsePositiveInt(env.MULTICLI_KILL_GRACE_MS, DEFAULTS.killGraceMs),
-    taskTtlMs: parsePositiveInt(env.MULTICLI_TASK_TTL_MS, DEFAULTS.taskTtlMs),
-    taskPollIntervalMs: parsePositiveInt(env.MULTICLI_TASK_POLL_INTERVAL_MS, DEFAULTS.taskPollIntervalMs),
-    progressIdleHeartbeatMs: parsePositiveInt(
-      env.MULTICLI_PROGRESS_IDLE_HEARTBEAT_MS,
-      DEFAULTS.progressIdleHeartbeatMs,
-    ),
-    progressThrottleMs: parsePositiveInt(
-      env.MULTICLI_PROGRESS_THROTTLE_MS,
-      DEFAULTS.progressThrottleMs,
-    ),
-    httpHost: parseString(env.MULTICLI_HTTP_HOST, DEFAULTS.httpHost),
-    httpPort: parsePositiveInt(env.MULTICLI_HTTP_PORT, DEFAULTS.httpPort),
-    httpPath: normalizeHttpPath(env.MULTICLI_HTTP_PATH, DEFAULTS.httpPath),
-    httpAuthToken: env.MULTICLI_HTTP_AUTH_TOKEN?.trim() || DEFAULTS.httpAuthToken,
-    httpSessionIdleMs: parsePositiveInt(
-      env.MULTICLI_HTTP_SESSION_IDLE_MS,
-      DEFAULTS.httpSessionIdleMs,
-    ),
-    logPath: parseString(env.MULTICLI_LOG_PATH, DEFAULTS.logPath),
-    logLevel: parseLogLevel(env.MULTICLI_LOG_LEVEL, DEFAULTS.logLevel),
-    stderrLogLevel: parseStderrLogLevel(
-      env.MULTICLI_STDERR_LOG_LEVEL,
-      DEFAULTS.stderrLogLevel,
-    ),
+    transport: parseTransport(env.SIDEKICK_TRANSPORT),
+    cliDetectTimeoutMs: parsePositiveInt(env.SIDEKICK_CLI_DETECT_TIMEOUT_MS, 5_000),
+    killGraceMs: parsePositiveInt(env.SIDEKICK_KILL_GRACE_MS, 5_000),
+    taskTtlMs: parsePositiveInt(env.SIDEKICK_TASK_TTL_MS, 60 * 60 * 1000),
+    taskPollIntervalMs: parsePositiveInt(env.SIDEKICK_TASK_POLL_INTERVAL_MS, 1_000),
+    progressIdleHeartbeatMs: parsePositiveInt(env.SIDEKICK_PROGRESS_IDLE_HEARTBEAT_MS, 10_000),
+    progressThrottleMs: parsePositiveInt(env.SIDEKICK_PROGRESS_THROTTLE_MS, 1_000),
+    httpHost: parseString(env.SIDEKICK_HTTP_HOST, '127.0.0.1'),
+    httpPort: parsePositiveInt(env.SIDEKICK_HTTP_PORT, 37420),
+    httpPath: normalizeHttpPath(env.SIDEKICK_HTTP_PATH, '/mcp'),
+    httpAuthToken: env.SIDEKICK_HTTP_AUTH_TOKEN?.trim() || undefined,
+    httpSessionIdleMs: parsePositiveInt(env.SIDEKICK_HTTP_SESSION_IDLE_MS, 30 * 60 * 1000),
+    logPath: parseString(env.SIDEKICK_LOG_PATH, path.join(sidekickHome, 'logs', 'sidekick.log')),
+    logLevel: parseLogLevel(env.SIDEKICK_LOG_LEVEL, 'debug'),
+    stderrLogLevel: parseStderrLogLevel(env.SIDEKICK_STDERR_LOG_LEVEL, 'error'),
+    sidekickHome,
+    configPath,
+    taskRootDir: path.join(sidekickHome, 'tasks'),
+    worktreeRootDir: path.join(sidekickHome, 'worktrees'),
     serviceRootDir,
     serviceLogPath: parseString(
-      env.MULTICLI_SERVICE_LOG_PATH,
+      env.SIDEKICK_SERVICE_LOG_PATH,
       path.join(serviceRootDir, 'logs', 'service.log'),
     ),
     serviceEnvPath: parseString(
-      env.MULTICLI_SERVICE_ENV_PATH,
+      env.SIDEKICK_SERVICE_ENV_PATH,
       path.join(serviceRootDir, 'env'),
     ),
     serviceManifestPath: parseString(
-      env.MULTICLI_SERVICE_MANIFEST_PATH ?? env.MULTICLI_SERVICE_RUNTIME_PATH,
+      env.SIDEKICK_SERVICE_MANIFEST_PATH,
       path.join(serviceRootDir, 'manifest.json'),
     ),
+    ...userConfigState,
   };
 }

@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import type { MultiCliConfig } from '../src/config.js';
+import type { SidekickConfig } from '../src/config.js';
 import { getServiceKind, getServicePaths } from '../src/service/paths.js';
 import { loadServiceEnvironment } from '../src/service/bootstrap.js';
 import { ensureServiceFilesystem, isMatchingClaudeConfigOutput } from '../src/service/manager.js';
@@ -20,13 +20,12 @@ import {
   renderWindowsTaskXml,
 } from '../src/service/renderers.js';
 
-function createConfig(overrides: Partial<MultiCliConfig> = {}): MultiCliConfig {
-  const serviceRootDir = path.join(os.tmpdir(), 'multicli-service-test');
+function createConfig(overrides: Partial<SidekickConfig> = {}): SidekickConfig {
+  const sidekickHome = path.join(os.tmpdir(), 'sidekick-service-test');
+  const serviceRootDir = path.join(sidekickHome, 'service');
 
   return {
     transport: 'http',
-    askTimeoutMs: 1_000,
-    helpTimeoutMs: 500,
     cliDetectTimeoutMs: 100,
     killGraceMs: 50,
     taskTtlMs: 60_000,
@@ -38,13 +37,18 @@ function createConfig(overrides: Partial<MultiCliConfig> = {}): MultiCliConfig {
     httpPath: '/mcp',
     httpAuthToken: 'token',
     httpSessionIdleMs: 60_000,
-    logPath: path.join(serviceRootDir, 'multicli.log'),
+    logPath: path.join(serviceRootDir, 'sidekick.log'),
     logLevel: 'debug',
     stderrLogLevel: 'silent',
+    sidekickHome,
+    configPath: path.join(sidekickHome, 'config.json'),
+    taskRootDir: path.join(sidekickHome, 'tasks'),
+    worktreeRootDir: path.join(sidekickHome, 'worktrees'),
     serviceRootDir,
     serviceLogPath: path.join(serviceRootDir, 'logs', 'service.log'),
     serviceEnvPath: path.join(serviceRootDir, 'env'),
     serviceManifestPath: path.join(serviceRootDir, 'manifest.json'),
+    setupRequired: true,
     ...overrides,
   };
 }
@@ -67,7 +71,7 @@ describe('service paths', () => {
   it('uses a recognizable launcher filename on macOS', () => {
     const config = createConfig();
 
-    expect(path.basename(getServicePaths(config, 'darwin').launcher)).toBe('Multi-CLI.sh');
+    expect(path.basename(getServicePaths(config, 'darwin').launcher)).toBe('sidekick.sh');
     expect(path.basename(getServicePaths(config, 'linux').launcher)).toBe('launcher.sh');
   });
 });
@@ -82,7 +86,7 @@ describe('service runtime', () => {
     expect(manifest.runtime.bootstrapPath).toContain('bootstrap.');
   });
 
-  it('renders a JSON env file with PATH and managed Multi-CLI variables', () => {
+  it('renders a JSON env file with PATH and managed Sidekick variables', () => {
     const manifest = createServiceManifest(createConfig(), 'token-value', 'darwin');
     const contents = buildServiceEnvFileContents(manifest, {
       PATH: '/usr/local/bin:/usr/bin',
@@ -93,21 +97,21 @@ describe('service runtime', () => {
 
     expect(parsed.PATH).toBe('/usr/local/bin:/usr/bin');
     expect(parsed.OPENAI_API_KEY).toBe('secret');
-    expect(parsed.MULTICLI_TRANSPORT).toBe('http');
-    expect(parsed.MULTICLI_HTTP_AUTH_TOKEN).toBe('token-value');
-    expect(parsed.MULTICLI_LOG_PATH).toBe(manifest.paths.logFile);
-    expect(parsed.MULTICLI_SERVICE_MANIFEST_PATH).toBe(manifest.paths.manifest);
-    expect(parsed.MULTICLI_SERVICE_RUNTIME_PATH).toBeUndefined();
+    expect(parsed.SIDEKICK_TRANSPORT).toBe('http');
+    expect(parsed.SIDEKICK_HTTP_AUTH_TOKEN).toBe('token-value');
+    expect(parsed.SIDEKICK_LOG_PATH).toBe(manifest.paths.logFile);
+    expect(parsed.SIDEKICK_SERVICE_MANIFEST_PATH).toBe(manifest.paths.manifest);
+    expect(parsed.SIDEKICK_SERVICE_RUNTIME_PATH).toBeUndefined();
   });
 
   it('loads the JSON env file into process environment entries', () => {
-    const envFile = path.join(os.tmpdir(), `multicli-service-env-${process.pid}.json`);
-    writeFileSync(envFile, JSON.stringify({ PATH: '/tmp/bin', MULTICLI_HTTP_AUTH_TOKEN: 'token-value' }), 'utf8');
+    const envFile = path.join(os.tmpdir(), `sidekick-service-env-${process.pid}.json`);
+    writeFileSync(envFile, JSON.stringify({ PATH: '/tmp/bin', SIDEKICK_HTTP_AUTH_TOKEN: 'token-value' }), 'utf8');
 
     try {
       const env = loadServiceEnvironment(envFile, {});
       expect(env.PATH).toBe('/tmp/bin');
-      expect(env.MULTICLI_HTTP_AUTH_TOKEN).toBe('token-value');
+      expect(env.SIDEKICK_HTTP_AUTH_TOKEN).toBe('token-value');
     } finally {
       rmSync(envFile, { force: true });
     }
@@ -146,56 +150,56 @@ describe('service renderers', () => {
 
   it('renders systemd unit paths without quoted path values', () => {
     const manifest = createServiceManifest(createConfig({
-      serviceRootDir: '/home/example/.config/multicli',
-      serviceLogPath: '/home/example/.config/multicli/logs/service.log',
-      serviceEnvPath: '/home/example/.config/multicli/env',
-      serviceManifestPath: '/home/example/.config/multicli/manifest.json',
+      serviceRootDir: '/home/example/.config/sidekick',
+      serviceLogPath: '/home/example/.config/sidekick/logs/service.log',
+      serviceEnvPath: '/home/example/.config/sidekick/env',
+      serviceManifestPath: '/home/example/.config/sidekick/manifest.json',
     }), 'token-value', 'linux');
     const unit = renderSystemdUnit(manifest);
 
-    expect(unit).toContain('WorkingDirectory=/home/example/.config/multicli');
-    expect(unit).toContain('ExecStart=/home/example/.config/multicli/launcher.sh');
-    expect(unit).toContain('StandardOutput=append:/home/example/.config/multicli/logs/service.log');
-    expect(unit).toContain('StandardError=append:/home/example/.config/multicli/logs/service.log.stderr');
+    expect(unit).toContain('WorkingDirectory=/home/example/.config/sidekick');
+    expect(unit).toContain('ExecStart=/home/example/.config/sidekick/launcher.sh');
+    expect(unit).toContain('StandardOutput=append:/home/example/.config/sidekick/logs/service.log');
+    expect(unit).toContain('StandardError=append:/home/example/.config/sidekick/logs/service.log.stderr');
     expect(unit).not.toContain('WorkingDirectory="');
     expect(unit).not.toContain('append:"');
   });
 
   it('escapes systemd unit paths with spaces', () => {
     const manifest = createServiceManifest(createConfig({
-      serviceRootDir: '/home/example/Multi CLI',
-      serviceLogPath: '/home/example/Multi CLI/logs/service.log',
-      serviceEnvPath: '/home/example/Multi CLI/env',
-      serviceManifestPath: '/home/example/Multi CLI/manifest.json',
+      serviceRootDir: '/home/example/Sidekick MCP',
+      serviceLogPath: '/home/example/Sidekick MCP/logs/service.log',
+      serviceEnvPath: '/home/example/Sidekick MCP/env',
+      serviceManifestPath: '/home/example/Sidekick MCP/manifest.json',
     }), 'token-value', 'linux');
     const unit = renderSystemdUnit(manifest);
 
-    expect(unit).toContain('WorkingDirectory=/home/example/Multi\\x20CLI');
-    expect(unit).toContain('ExecStart=/home/example/Multi\\x20CLI/launcher.sh');
-    expect(unit).toContain('StandardOutput=append:/home/example/Multi\\x20CLI/logs/service.log');
-    expect(unit).toContain('StandardError=append:/home/example/Multi\\x20CLI/logs/service.log.stderr');
+    expect(unit).toContain('WorkingDirectory=/home/example/Sidekick\\x20MCP');
+    expect(unit).toContain('ExecStart=/home/example/Sidekick\\x20MCP/launcher.sh');
+    expect(unit).toContain('StandardOutput=append:/home/example/Sidekick\\x20MCP/logs/service.log');
+    expect(unit).toContain('StandardError=append:/home/example/Sidekick\\x20MCP/logs/service.log.stderr');
   });
 
   it('escapes literal percent characters in systemd unit paths', () => {
     const manifest = createServiceManifest(createConfig({
-      serviceRootDir: '/home/example/Multi%CLI',
-      serviceLogPath: '/home/example/Multi%CLI/logs/service.log',
-      serviceEnvPath: '/home/example/Multi%CLI/env',
-      serviceManifestPath: '/home/example/Multi%CLI/manifest.json',
+      serviceRootDir: '/home/example/Sidekick%MCP',
+      serviceLogPath: '/home/example/Sidekick%MCP/logs/service.log',
+      serviceEnvPath: '/home/example/Sidekick%MCP/env',
+      serviceManifestPath: '/home/example/Sidekick%MCP/manifest.json',
     }), 'token-value', 'linux');
     const unit = renderSystemdUnit(manifest);
 
-    expect(unit).toContain('WorkingDirectory=/home/example/Multi%%CLI');
-    expect(unit).toContain('ExecStart=/home/example/Multi%%CLI/launcher.sh');
-    expect(unit).toContain('StandardOutput=append:/home/example/Multi%%CLI/logs/service.log');
-    expect(unit).toContain('StandardError=append:/home/example/Multi%%CLI/logs/service.log.stderr');
+    expect(unit).toContain('WorkingDirectory=/home/example/Sidekick%%MCP');
+    expect(unit).toContain('ExecStart=/home/example/Sidekick%%MCP/launcher.sh');
+    expect(unit).toContain('StandardOutput=append:/home/example/Sidekick%%MCP/logs/service.log');
+    expect(unit).toContain('StandardError=append:/home/example/Sidekick%%MCP/logs/service.log.stderr');
     expect(unit).not.toContain('\\x25');
   });
 });
 
 describe('service manager', () => {
   it('creates directories required before systemd starts the service', () => {
-    const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'multicli-service-fs-'));
+    const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'sidekick-service-fs-'));
     const serviceRootDir = path.join(tempRoot, 'service');
     const manifest = createServiceManifest(createConfig({
       serviceRootDir,
@@ -220,7 +224,7 @@ describe('service manager', () => {
     const manifest = createServiceManifest(createConfig(), 'token-value', 'darwin');
 
     const matchingOutput = [
-      'Multi-CLI:',
+      'Sidekick:',
       '  Scope: User config (available in all your projects)',
       '  Status: ✓ Connected',
       '  Type: http',
@@ -230,12 +234,12 @@ describe('service manager', () => {
     ].join('\n');
 
     const stdioOutput = [
-      'Multi-CLI:',
+      'Sidekick:',
       '  Scope: User config (available in all your projects)',
       '  Status: ✓ Connected',
       '  Type: stdio',
       '  Command: node',
-      '  Args: /Users/arlogilbert/Repos/multicli/dist/index.js',
+      '  Args: /Users/example/Repos/sidekick-mcp/dist/index.js',
     ].join('\n');
 
     expect(isMatchingClaudeConfigOutput(matchingOutput, manifest)).toBe(true);

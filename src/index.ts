@@ -42,7 +42,7 @@ async function main() {
     filePath: config.logPath,
     fileLevel: config.logLevel,
     stderrLevel: config.stderrLogLevel,
-    bindings: { component: 'multicli' },
+    bindings: { component: 'sidekick' },
   });
   const logger = rootLogger.child({ component: 'index' });
 
@@ -110,7 +110,7 @@ main().catch((error) => {
     filePath: config.logPath,
     fileLevel: config.logLevel,
     stderrLevel: config.stderrLogLevel,
-    bindings: { component: 'multicli' },
+    bindings: { component: 'sidekick' },
   });
   const logger = rootLogger.child({ component: 'index' });
   logger.error('server_startup_failed', { error });

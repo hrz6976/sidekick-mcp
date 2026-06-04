@@ -13,7 +13,7 @@ Only the latest minor release receives security patches.
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Use [GitHub Private Vulnerability Reporting](https://github.com/osanoai/multicli/security/advisories/new) to submit a report. This ensures the details remain confidential until a fix is available.
+Use private vulnerability reporting on the repository that publishes `@hrz6976/sidekick-mcp`, or contact the package maintainer through the npm package owner channel. Do not disclose details publicly until a fix is available.
 
 ### What to include
 

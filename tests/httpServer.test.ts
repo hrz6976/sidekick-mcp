@@ -25,8 +25,8 @@ vi.mock('../src/utils/commandExecutor.js', async (importOriginal) => {
 import { detectAvailableClis } from '../src/utils/cliDetector.js';
 import { executeCommand } from '../src/utils/commandExecutor.js';
 import { startHttpServer } from '../src/httpServer.js';
-import type { MultiCliHttpServer } from '../src/httpServer.js';
-import type { MultiCliConfig } from '../src/config.js';
+import type { SidekickHttpServer } from '../src/httpServer.js';
+import type { SidekickConfig } from '../src/config.js';
 
 async function findAvailablePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -59,14 +59,13 @@ const canBindLoopback = await new Promise<boolean>((resolve) => {
   });
 });
 
-async function createHttpConfig(): Promise<MultiCliConfig> {
+async function createHttpConfig(): Promise<SidekickConfig> {
   const port = await findAvailablePort();
-  const serviceRootDir = path.join(os.tmpdir(), `multicli-http-${process.pid}-${port}`);
+  const sidekickHome = path.join(os.tmpdir(), `sidekick-http-${process.pid}-${port}`);
+  const serviceRootDir = path.join(sidekickHome, 'service');
 
   return {
     transport: 'http',
-    askTimeoutMs: 1000,
-    helpTimeoutMs: 500,
     cliDetectTimeoutMs: 100,
     killGraceMs: 50,
     taskTtlMs: 60_000,
@@ -78,18 +77,35 @@ async function createHttpConfig(): Promise<MultiCliConfig> {
     httpPath: '/mcp',
     httpAuthToken: 'test-token',
     httpSessionIdleMs: 60_000,
-    logPath: path.join(serviceRootDir, 'multicli.log'),
+    logPath: path.join(serviceRootDir, 'sidekick.log'),
     logLevel: 'debug',
     stderrLogLevel: 'silent',
+    sidekickHome,
+    configPath: path.join(sidekickHome, 'config.json'),
+    taskRootDir: path.join(sidekickHome, 'tasks'),
+    worktreeRootDir: path.join(sidekickHome, 'worktrees'),
     serviceRootDir,
     serviceLogPath: path.join(serviceRootDir, 'logs', 'service.log'),
     serviceEnvPath: path.join(serviceRootDir, 'env'),
     serviceManifestPath: path.join(serviceRootDir, 'manifest.json'),
+    setupRequired: false,
+    userConfig: {
+      agents: {
+        claude: {
+          runner: 'claude',
+          enabled: true,
+          command: 'claude',
+          model: 'sonnet',
+          extraArgs: [],
+        },
+      },
+      defaults: { mode: 'edit', worktree: 'auto' },
+    },
   };
 }
 
 describe.skipIf(!canBindLoopback)('httpServer', () => {
-  let server: MultiCliHttpServer | undefined;
+  let server: SidekickHttpServer | undefined;
   let client: Client | undefined;
 
   beforeEach(() => {
@@ -133,11 +149,9 @@ describe.skipIf(!canBindLoopback)('httpServer', () => {
     expect(response.status).toBe(401);
   });
 
-  it('serves tool calls over HTTP and resolves the session working directory from roots', async () => {
+  it('serves Sidekick tool calls over HTTP', async () => {
     const config = await createHttpConfig();
     server = await startHttpServer(config);
-    vi.mocked(executeCommand).mockResolvedValue('http response');
-
     client = new Client(
       { name: 'http-test-client', version: '1.0.0' },
       {
@@ -165,25 +179,25 @@ describe.skipIf(!canBindLoopback)('httpServer', () => {
 
     await client.connect(transport);
 
+    const tools = await client.listTools();
+    expect(tools.tools.map((tool) => tool.name)).toEqual([
+      'setup',
+      'ask_claude',
+      'list_agents',
+      'cleanup_worktree',
+    ]);
+
     const result = await client.callTool(
       {
-        name: 'Ask-Claude',
-        arguments: {
-          prompt: 'hello',
-          model: 'claude-sonnet-4-6',
-        },
+        name: 'list_agents',
+        arguments: {},
       },
       CallToolResultSchema,
     );
 
     expect(result.isError).toBe(false);
-    expect(result.content[0].text).toContain('Claude response:\nhttp response');
-    expect(executeCommand).toHaveBeenCalledWith(
-      'claude',
-      expect.any(Array),
-      expect.objectContaining({
-        cwd: '/tmp/http-root',
-      }),
-    );
+    expect(result.content[0].text).toContain('"agent": "claude"');
+    expect(result.content[0].text).toContain('"model": "sonnet"');
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 });

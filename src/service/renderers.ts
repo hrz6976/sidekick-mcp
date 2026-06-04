@@ -77,7 +77,7 @@ export function renderLaunchAgent(manifest: ServiceManifest): string {
 
 export function renderSystemdUnit(manifest: ServiceManifest): string {
   return `[Unit]
-Description=Multi-CLI local HTTP service
+Description=Sidekick MCP local HTTP service
 After=network.target
 
 [Service]

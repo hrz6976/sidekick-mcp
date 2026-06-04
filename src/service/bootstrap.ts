@@ -19,7 +19,7 @@ export function loadServiceEnvironment(
   return targetEnv;
 }
 
-export async function runServiceBootstrap(argv = process.argv.slice(2)): Promise<void> {
+async function runServiceBootstrap(argv = process.argv.slice(2)): Promise<void> {
   const [envFilePath, entrypointPath, ...entrypointArgs] = argv;
 
   if (!envFilePath || !entrypointPath) {

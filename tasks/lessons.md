@@ -1,0 +1,10 @@
+# Lessons
+
+- Do not mark a large rewrite complete only because lint, unit tests, and a narrow smoke check pass. Completion needs a requirement-by-requirement audit against naming, dead-code cleanup, and realistic end-to-end behavior.
+- When a user asks for Sidekick naming, keep package/binary names only where explicitly required, but avoid leaking implementation-specific `sidekick_mcp` / `SIDEKICK_MCP` names into config paths, environment variables, docs, and generated runtime files.
+- For agent-orchestration MCP servers, mocked tests are not enough for final confidence. Add an end-to-end harness and, when the user permits it, run real CLI/model smoke tests or document exact external blockers.
+- Do not say all supported agents have E2E coverage unless the test matrix or commands explicitly enumerate every agent. Separate fake built-server E2E, runner unit tests, and real CLI/model smoke in the final report.
+- Before adding explicit working-directory parameters to MCP tools, first verify whether the target clients already provide roots or server launch cwd. If client support is not uniform, keep any new parameter clearly optional and test fallback precedence.
+- Do not infer that Claude Code supports task-augmented MCP tool calls just because its binary contains MCP Tasks strings. Verify the actual model-turn tool path and advertised client capabilities; Claude Code may support task primitives for other request types while still invoking MCP tools through ordinary `tools/call`.
+- For broad MCP client compatibility, long-running tools should advertise `taskSupport: "optional"` and support ordinary `tools/call` unless every target client is verified to send task augmentation on model-initiated tool calls.
+- Do not label static fallback model lists as "currently available models". Distinguish live CLI catalogs, bundled catalogs, configured allowlists, selected/default models, and unverifiable candidate models; verify each runner's actual discovery command before wiring setup prompts.

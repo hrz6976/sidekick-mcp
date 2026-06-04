@@ -1,23 +1,21 @@
 {
-  "name": "@osanoai/multicli",
+  "name": "@hrz6976/sidekick-mcp",
   "version": "1.5.40",
-  "description": "MCP server for Multiple CLI coding agent integration (Claude + Gemini + Codex)",
+  "description": "Sidekick MCP server for launching Claude, Gemini, Codex, and OpenCode as task-based helper agents",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "multicli": "dist/index.js"
+    "sidekick-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc && cp -f src/modelCatalog.generated.json dist/ 2>/dev/null || true",
+    "build": "rm -rf dist && tsc",
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "lint": "tsc --noEmit",
-    "prepublishOnly": "echo '⚠️  Remember to test locally first!' && npm run build",
-    "refresh-catalog": "npx tsx scripts/refresh-catalog.ts",
-    "prepare": "husky || true"
+    "test:e2e": "npm run build && node tests/e2e-sidekick.mjs",
+    "test:e2e:real": "npm run build && node tests/real-model-smoke.mjs",
+    "test:e2e:real:all": "npm run build && node tests/real-model-smoke.mjs claude sonnet && node tests/real-model-smoke.mjs gemini && node tests/real-model-smoke.mjs codex && node tests/real-model-smoke.mjs opencode",
+    "lint": "tsc --noEmit"
   },
   "keywords": [
     "mcp",
@@ -30,15 +28,7 @@
     "agent",
     "llm"
   ],
-  "author": "arlogilbert",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/osanoai/multicli.git"
-  },
-  "bugs": {
-    "url": "https://github.com/osanoai/multicli/issues"
-  },
-  "homepage": "https://github.com/osanoai/multicli#readme",
+  "author": "Claude, Codex, and Gemini",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -53,8 +43,6 @@
   },
   "devDependencies": {
     "@types/node": "^25.3.3",
-    "@vitest/coverage-v8": "^4.1.5",
-    "husky": "^9.1.7",
     "typescript": "^5.9.3",
     "vitest": "^4.1.5"
   },

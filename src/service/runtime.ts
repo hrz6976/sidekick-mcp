@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { MultiCliConfig } from '../config.js';
+import type { SidekickConfig } from '../config.js';
 import type { ServiceManifest, ServicePaths } from './types.js';
 import { SERVICE_LABEL, WINDOWS_TASK_NAME, getServiceKind, getServicePaths } from './paths.js';
 
@@ -29,22 +29,23 @@ function isTransientRuntimePath(targetPath: string): boolean {
     || targetPath.includes(`${path.sep}npm${path.sep}_npx${path.sep}`);
 }
 
-export function resolveEntrypointPath(): string {
+function resolveEntrypointPath(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
+    path.resolve(moduleDir, '..', 'index.ts'),
     path.resolve(moduleDir, '..', 'index.js'),
     path.resolve(moduleDir, '..', '..', 'dist', 'index.js'),
   ];
 
   const existingCandidate = candidates.find((candidate) => existsSync(candidate));
   if (!existingCandidate) {
-    throw new Error(`Unable to locate a runnable Multi-CLI entrypoint. Tried: ${candidates.join(', ')}`);
+    throw new Error(`Unable to locate a runnable Sidekick MCP entrypoint. Tried: ${candidates.join(', ')}`);
   }
 
   return existingCandidate;
 }
 
-export function resolveBootstrapPath(): string {
+function resolveBootstrapPath(): string {
   const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
     path.resolve(moduleDir, '..', '..', 'dist', 'service', 'bootstrap.js'),
@@ -54,13 +55,13 @@ export function resolveBootstrapPath(): string {
 
   const existingCandidate = candidates.find((candidate) => existsSync(candidate));
   if (!existingCandidate) {
-    throw new Error(`Unable to locate the Multi-CLI service bootstrap. Tried: ${candidates.join(', ')}`);
+    throw new Error(`Unable to locate the Sidekick MCP service bootstrap. Tried: ${candidates.join(', ')}`);
   }
 
   return existingCandidate;
 }
 
-export function resolveServiceRuntime(): {
+function resolveServiceRuntime(): {
   nodePath: string;
   bootstrapPath: string;
   entrypointPath: string;
@@ -72,7 +73,7 @@ export function resolveServiceRuntime(): {
 
   if (isTransientRuntimePath(nodePath) || isTransientRuntimePath(bootstrapPath) || isTransientRuntimePath(entrypointPath)) {
     throw new Error(
-      'Service install cannot use a transient npx runtime. Install Multi-CLI globally or run it from a stable local checkout first.',
+      'Service install cannot use a transient npx runtime. Install Sidekick MCP globally or run it from a stable local checkout first.',
     );
   }
 
@@ -105,16 +106,16 @@ export function buildServiceEnvFileContents(
   currentEnv: NodeJS.ProcessEnv = process.env,
 ): string {
   const managedEntries: Record<string, string> = {
-    MULTICLI_TRANSPORT: 'http',
-    MULTICLI_HTTP_HOST: manifest.transport.host,
-    MULTICLI_HTTP_PORT: String(manifest.transport.port),
-    MULTICLI_HTTP_PATH: manifest.transport.path,
-    MULTICLI_HTTP_AUTH_TOKEN: manifest.transport.token,
-    MULTICLI_LOG_PATH: manifest.paths.logFile,
-    MULTICLI_SERVICE_ROOT_DIR: manifest.paths.root,
-    MULTICLI_SERVICE_LOG_PATH: manifest.paths.logFile,
-    MULTICLI_SERVICE_ENV_PATH: manifest.paths.envFile,
-    MULTICLI_SERVICE_MANIFEST_PATH: manifest.paths.manifest,
+    SIDEKICK_TRANSPORT: 'http',
+    SIDEKICK_HTTP_HOST: manifest.transport.host,
+    SIDEKICK_HTTP_PORT: String(manifest.transport.port),
+    SIDEKICK_HTTP_PATH: manifest.transport.path,
+    SIDEKICK_HTTP_AUTH_TOKEN: manifest.transport.token,
+    SIDEKICK_LOG_PATH: manifest.paths.logFile,
+    SIDEKICK_SERVICE_ROOT_DIR: manifest.paths.root,
+    SIDEKICK_SERVICE_LOG_PATH: manifest.paths.logFile,
+    SIDEKICK_SERVICE_ENV_PATH: manifest.paths.envFile,
+    SIDEKICK_SERVICE_MANIFEST_PATH: manifest.paths.manifest,
   };
 
   const envEntries: Record<string, string> = {};
@@ -138,7 +139,7 @@ export function buildServiceEnvFileContents(
 }
 
 export function createServiceManifest(
-  config: MultiCliConfig,
+  config: SidekickConfig,
   token: string,
   platform: NodeJS.Platform = process.platform,
 ): ServiceManifest {

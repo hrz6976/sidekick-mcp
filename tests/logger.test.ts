@@ -16,9 +16,9 @@ describe('logger', () => {
   });
 
   it('writes structured JSON lines with child bindings and serialized errors', () => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'multicli-logger-'));
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'sidekick-logger-'));
     tempDirs.push(dir);
-    const logPath = path.join(dir, 'multicli.log');
+    const logPath = path.join(dir, 'sidekick.log');
     const logger = createLogger({
       filePath: logPath,
       fileLevel: 'debug',
@@ -47,9 +47,9 @@ describe('logger', () => {
   });
 
   it('serializes cyclic error causes without recursing forever', () => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'multicli-logger-'));
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'sidekick-logger-'));
     tempDirs.push(dir);
-    const logPath = path.join(dir, 'multicli.log');
+    const logPath = path.join(dir, 'sidekick.log');
     const logger = createLogger({
       filePath: logPath,
       fileLevel: 'debug',
@@ -67,9 +67,9 @@ describe('logger', () => {
   });
 
   it('rotates logs without failing when the oldest backup already exists', () => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'multicli-logger-'));
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'sidekick-logger-'));
     tempDirs.push(dir);
-    const logPath = path.join(dir, 'multicli.log');
+    const logPath = path.join(dir, 'sidekick.log');
 
     writeFileSync(logPath, 'x'.repeat(11 * 1024 * 1024), 'utf8');
     for (let index = 1; index <= 5; index += 1) {

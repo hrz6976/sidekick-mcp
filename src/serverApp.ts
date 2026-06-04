@@ -26,10 +26,11 @@ import {
   type ListRootsResult,
 } from "@modelcontextprotocol/sdk/types.js";
 import { PROTOCOL, ToolArguments } from "./constants.js";
-import { MultiCliConfig, loadConfig } from "./config.js";
+import { SidekickConfig, loadConfig } from "./config.js";
 import { ToolExecutionContext } from "./execution.js";
 import { Logger, createLogger } from "./logger.js";
 import { ManagedTaskStore } from "./taskStore.js";
+import { TaskMetadataStore } from "./tasks/metadataStore.js";
 import {
   getToolDefinitions,
   getPromptDefinitions,
@@ -41,23 +42,25 @@ import {
   getTool,
   validateToolArguments,
 } from "./tools/index.js";
-import { importantReadNowTool } from './tools/important-read-now.tool.js';
-import { filterToolsForClient, isToolBlockedForClient } from './clientFilter.js';
 import { CommandExecutionError } from "./utils/commandExecutor.js";
 import type { CliAvailability } from "./utils/cliDetector.js";
 
 type HandlerExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 type ProgressToken = string | number | undefined;
+type TaskCreationParams = {
+  ttl?: number | null;
+  pollInterval?: number;
+};
 type TaskExecution = {
   controller: AbortController;
 };
 
-export interface MultiCliRuntime {
+export interface SidekickRuntime {
   availability: CliAvailability;
   initializedAt: string;
 }
 
-export interface MultiCliSessionContext {
+export interface SidekickSessionContext {
   cwd?: string;
   rootUri?: string;
   projectRoots?: ListRootsResult['roots'];
@@ -75,12 +78,12 @@ export interface MultiCliSessionContext {
 }
 
 export interface CreateServerAppOptions {
-  runtime?: MultiCliRuntime;
-  sessionContext?: MultiCliSessionContext;
+  runtime?: SidekickRuntime;
+  sessionContext?: SidekickSessionContext;
   onClientInitialized?: (
     server: Server,
     clientInfo: Implementation | undefined,
-    sessionContext: MultiCliSessionContext,
+    sessionContext: SidekickSessionContext,
   ) => Promise<void> | void;
 }
 
@@ -120,13 +123,9 @@ function extractProgressPreview(chunk: string): string | undefined {
   return preview.length > 180 ? `${preview.slice(0, 177)}...` : preview;
 }
 
-function getTimeoutForTool(toolName: string, config: MultiCliConfig): number | undefined {
+function getTimeoutForTool(toolName: string, _config: SidekickConfig): number | undefined {
   const tool = getTool(toolName);
   switch (tool?.timeoutClass) {
-    case 'ask':
-      return config.askTimeoutMs;
-    case 'help':
-      return config.helpTimeoutMs;
     default:
       return undefined;
   }
@@ -135,6 +134,16 @@ function getTimeoutForTool(toolName: string, config: MultiCliConfig): number | u
 function supportsTaskExecution(toolName: string): boolean {
   const tool = getTool(toolName);
   return tool?.execution?.taskSupport === 'optional' || tool?.execution?.taskSupport === 'required';
+}
+
+function getTaskCreationParams(request: CallToolRequest): TaskCreationParams | undefined {
+  const params = request.params as {
+    task?: TaskCreationParams;
+    _meta?: {
+      task?: TaskCreationParams;
+    };
+  };
+  return params.task ?? params._meta?.task;
 }
 
 function getErrorMeta(error: unknown): Record<string, unknown> | undefined {
@@ -154,26 +163,29 @@ function getErrorMeta(error: unknown): Record<string, unknown> | undefined {
 }
 
 export async function createServerRuntime(
-  config: MultiCliConfig = loadConfig(),
+  config: SidekickConfig = loadConfig(),
   rootLogger: Logger = createLogger({
     filePath: config.logPath,
     fileLevel: config.logLevel,
     stderrLevel: config.stderrLogLevel,
-    bindings: { component: 'multicli' },
+    bindings: { component: 'sidekick' },
   }),
-): Promise<MultiCliRuntime> {
+): Promise<SidekickRuntime> {
   const logger = rootLogger.child({ component: 'serverRuntime' });
   logger.info('server_runtime_initializing', { config });
 
   const availability = await initTools({
     cliDetectTimeoutMs: config.cliDetectTimeoutMs,
     logger: rootLogger.child({ component: 'cliDetector' }),
+    sidekickConfig: config,
   });
 
-  const runtime: MultiCliRuntime = {
+  const runtime: SidekickRuntime = {
     availability,
     initializedAt: new Date().toISOString(),
   };
+
+  await new TaskMetadataStore(config.taskRootDir).markInterruptedRunningTasks();
 
   logger.info('server_runtime_initialized', { runtime });
   return runtime;
@@ -217,7 +229,7 @@ export async function resolveWorkingDirectoryFromRoots(
 function createProgressReporter(
   server: Server,
   logger: Logger,
-  config: MultiCliConfig,
+  config: SidekickConfig,
   progressToken: ProgressToken,
   operationName: string,
 ) {
@@ -356,13 +368,14 @@ function createProgressReporter(
       await queueProgressWork(async () => {
         await flushPreview(true, true);
         completed = true;
+        progress += 1;
 
         if (status === 'success') {
-          await sendProgressNotification(100, `Completed ${operationName}`, 100);
+          await sendProgressNotification(progress, `Completed ${operationName}`);
         } else if (status === 'cancelled') {
-          await sendProgressNotification(100, `Cancelled ${operationName}`, 100);
+          await sendProgressNotification(progress, `Cancelled ${operationName}`);
         } else {
-          await sendProgressNotification(100, `Failed ${operationName}`, 100);
+          await sendProgressNotification(progress, `Failed ${operationName}`);
         }
       });
 
@@ -371,23 +384,23 @@ function createProgressReporter(
   };
 }
 
-export interface MultiCliServerApp {
+export interface SidekickServerApp {
   readonly server: Server;
-  readonly config: MultiCliConfig;
+  readonly config: SidekickConfig;
   connect(transport: Transport): Promise<void>;
   close(reason?: string): Promise<void>;
 }
 
 export async function createServerApp(
-  config: MultiCliConfig = loadConfig(),
+  config: SidekickConfig = loadConfig(),
   rootLogger: Logger = createLogger({
     filePath: config.logPath,
     fileLevel: config.logLevel,
     stderrLevel: config.stderrLogLevel,
-    bindings: { component: 'multicli' },
+    bindings: { component: 'sidekick' },
   }),
   options: CreateServerAppOptions = {},
-): Promise<MultiCliServerApp> {
+): Promise<SidekickServerApp> {
   const logger = rootLogger.child({ component: 'serverApp' });
   const sessionContext = options.sessionContext ?? { transport: 'stdio', cwd: process.cwd() };
   const runtime = options.runtime ?? await createServerRuntime(config, rootLogger);
@@ -403,7 +416,7 @@ export async function createServerApp(
 
   const server = new Server(
     {
-      name: "Multi-CLI",
+      name: "Sidekick",
       version: process.env.npm_package_version || "1.5.0",
     },
     {
@@ -536,15 +549,11 @@ export async function createServerApp(
   };
 
   server.setRequestHandler(ListToolsRequestSchema, async (_request: ListToolsRequest): Promise<{ tools: Tool[] }> => {
-    const visible = filterToolsForClient(toolRegistry, connectedClientName);
     logger.debug('list_tools_requested', {
       connectedClientName,
-      visibleToolNames: visible.map((tool) => tool.name),
+      visibleToolNames: toolRegistry.map((tool) => tool.name),
     });
-    if (visible.length === 0) {
-      return { tools: getToolDefinitions([importantReadNowTool]) as unknown as Tool[] };
-    }
-    return { tools: getToolDefinitions(visible) as unknown as Tool[] };
+    return { tools: getToolDefinitions() as unknown as Tool[] };
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (
@@ -553,17 +562,8 @@ export async function createServerApp(
   ): Promise<CallToolResult | CreateTaskResult> => {
     const toolName: string = request.params.name;
 
-    if (toolName === importantReadNowTool.name) {
-      const result = await importantReadNowTool.execute({});
-      return buildToolResult(result, false);
-    }
-
     const toolEntry = getTool(toolName);
-    if (isToolBlockedForClient(toolEntry, connectedClientName)) {
-      throw new Error(`Unknown tool: ${toolName}`);
-    }
-
-    if (!toolExists(toolName)) {
+    if (!toolEntry || !toolExists(toolName)) {
       throw new Error(`Unknown tool: ${toolName}`);
     }
 
@@ -576,7 +576,7 @@ export async function createServerApp(
       toolName,
     });
     const progressReporter = createProgressReporter(server, requestLogger, config, progressToken, toolName);
-    const taskParams = (request.params as { task?: { ttl?: number | null; pollInterval?: number } }).task;
+    const taskParams = getTaskCreationParams(request);
 
     requestLogger.info('tool_request_started', {
       task: !!taskParams,
@@ -689,6 +689,13 @@ export async function createServerApp(
       return { task };
     }
 
+    if (toolEntry.execution?.taskSupport === 'required') {
+      return buildToolResult(
+        `Tool "${toolName}" must be called through MCP Tasks. Re-call it with task augmentation enabled.`,
+        true,
+      );
+    }
+
     await progressReporter.start();
 
     try {
@@ -720,18 +727,17 @@ export async function createServerApp(
   });
 
   server.setRequestHandler(ListPromptsRequestSchema, async (_request: ListPromptsRequest): Promise<{ prompts: Prompt[] }> => {
-    const visible = filterToolsForClient(toolRegistry, connectedClientName);
     logger.debug('list_prompts_requested', {
       connectedClientName,
-      visiblePromptNames: visible.filter((tool) => tool.prompt).map((tool) => tool.name),
+      visiblePromptNames: toolRegistry.filter((tool) => tool.prompt).map((tool) => tool.name),
     });
-    return { prompts: getPromptDefinitions(visible) as unknown as Prompt[] };
+    return { prompts: getPromptDefinitions() as unknown as Prompt[] };
   });
 
   server.setRequestHandler(GetPromptRequestSchema, async (request: GetPromptRequest): Promise<GetPromptResult> => {
     const promptName = request.params.name;
     const promptEntry = getTool(promptName);
-    if (isToolBlockedForClient(promptEntry, connectedClientName)) {
+    if (!promptEntry) {
       throw new Error(`Unknown prompt: ${promptName}`);
     }
 
@@ -790,14 +796,14 @@ export async function createServerApp(
 }
 
 export async function startServer(
-  config: MultiCliConfig = loadConfig(),
+  config: SidekickConfig = loadConfig(),
   rootLogger: Logger = createLogger({
     filePath: config.logPath,
     fileLevel: config.logLevel,
     stderrLevel: config.stderrLogLevel,
-    bindings: { component: 'multicli' },
+    bindings: { component: 'sidekick' },
   }),
-): Promise<MultiCliServerApp> {
+): Promise<SidekickServerApp> {
   const logger = rootLogger.child({ component: 'startServer' });
   logger.info('stdio_server_starting', { config });
   const runtime = await createServerRuntime(config, rootLogger);

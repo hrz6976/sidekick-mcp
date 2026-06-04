@@ -225,9 +225,9 @@ describe('commandExecutor', () => {
   });
 
   it('logs subprocess lifecycle events while redacting sensitive command data', async () => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), 'multicli-command-'));
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'sidekick-command-'));
     try {
-      const logPath = path.join(dir, 'multicli.log');
+      const logPath = path.join(dir, 'sidekick.log');
       const logger = createLogger({
         filePath: logPath,
         fileLevel: 'debug',
@@ -271,7 +271,7 @@ describe('commandExecutor', () => {
       cwd: '/tmp/project-root',
       env: {
         PATH: '/custom/bin',
-        MULTICLI_SERVICE: '1',
+        SIDEKICK_SERVICE: '1',
       },
     });
     mock.emitStdout('help output');
@@ -286,7 +286,7 @@ describe('commandExecutor', () => {
         cwd: '/tmp/project-root',
         env: {
           PATH: '/custom/bin',
-          MULTICLI_SERVICE: '1',
+          SIDEKICK_SERVICE: '1',
         },
       }),
     );

@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
-import type { MultiCliConfig } from '../config.js';
+import type { SidekickConfig } from '../config.js';
 import { detectAvailableClis } from '../utils/cliDetector.js';
 import { executeCommand } from '../utils/commandExecutor.js';
 import type { Logger } from '../logger.js';
@@ -64,10 +64,10 @@ export function ensureServiceFilesystem(manifest: ServiceManifest) {
   ensureParentDir(manifest.paths.stderrLogFile);
 }
 
-function loadManifest(config: MultiCliConfig): ServiceManifest {
+function loadManifest(config: SidekickConfig): ServiceManifest {
   const manifestPath = config.serviceManifestPath;
   if (!existsSync(manifestPath)) {
-    throw new Error(`Multi-CLI service is not installed. Missing manifest at ${manifestPath}`);
+    throw new Error(`Sidekick MCP service is not installed. Missing manifest at ${manifestPath}`);
   }
 
   return JSON.parse(readFileSync(manifestPath, 'utf8')) as ServiceManifest;
@@ -109,7 +109,7 @@ async function waitForHealth(manifest: ServiceManifest, logger: Logger) {
 async function configureClaude(manifest: ServiceManifest, logger: Logger) {
   await runBestEffort(
     'claude',
-    ['mcp', 'remove', '--scope', 'user', 'Multi-CLI'],
+    ['mcp', 'remove', '--scope', 'user', 'Sidekick'],
     logger,
   );
 
@@ -122,7 +122,7 @@ async function configureClaude(manifest: ServiceManifest, logger: Logger) {
       'user',
       '--transport',
       'http',
-      'Multi-CLI',
+      'Sidekick',
       manifest.transport.url,
       '--header',
       `Authorization: Bearer ${manifest.transport.token}`,
@@ -147,7 +147,7 @@ async function inspectClaudeConfig(
   try {
     const output = await executeCommand(
       'claude',
-      ['mcp', 'get', 'Multi-CLI'],
+      ['mcp', 'get', 'Sidekick'],
       { logger },
     );
 
@@ -258,7 +258,7 @@ function renderServiceDefinition(manifest: ServiceManifest): string {
 }
 
 async function installService(
-  config: MultiCliConfig,
+  config: SidekickConfig,
   logger: Logger,
   options: ServiceInstallOptions,
 ): Promise<ServiceManifest> {
@@ -335,7 +335,7 @@ function tailFile(filePath: string, lineCount = 200): string {
 
 export async function handleServiceCommand(
   args: string[],
-  config: MultiCliConfig,
+  config: SidekickConfig,
   logger: Logger,
 ): Promise<void> {
   const [subcommand = 'status', ...rest] = args;
@@ -349,7 +349,7 @@ export async function handleServiceCommand(
         serviceLogger.child({ component: 'cliDetector' }),
       );
       if (!Object.values(availability).some(Boolean)) {
-        throw new Error('Cannot install the Multi-CLI service because no supported backend CLIs were detected on PATH.');
+        throw new Error('Cannot install the Sidekick MCP service because no supported backend CLIs were detected on PATH.');
       }
 
       const manifest = await installService(config, serviceLogger, {
@@ -357,13 +357,13 @@ export async function handleServiceCommand(
       });
       process.stdout.write(
         [
-          `Installed Multi-CLI service (${manifest.serviceKind}).`,
+          `Installed Sidekick MCP service (${manifest.serviceKind}).`,
           `Service URL: ${manifest.transport.url}`,
           `Health URL: ${manifest.transport.healthUrl}`,
           `Launcher: ${manifest.paths.launcher}`,
           configureClaudeFlag
             ? 'Claude Code configuration updated.'
-            : 'Run `multicli service refresh --configure-claude` or configure Claude manually if needed.',
+            : 'Run `sidekick-mcp service refresh --configure-claude` or configure Claude manually if needed.',
         ].join('\n') + '\n',
       );
       return;
@@ -373,7 +373,7 @@ export async function handleServiceCommand(
         configureClaude: configureClaudeFlag,
         preserveToken: true,
       });
-      process.stdout.write(`Refreshed Multi-CLI service at ${manifest.transport.url}\n`);
+      process.stdout.write(`Refreshed Sidekick MCP service at ${manifest.transport.url}\n`);
       return;
     }
     case 'uninstall': {
@@ -381,26 +381,26 @@ export async function handleServiceCommand(
       const claudeConfig = await inspectClaudeConfig(manifest, serviceLogger);
       await unregisterService(manifest, serviceLogger);
       if (claudeConfig.matchesManagedService) {
-        await runBestEffort('claude', ['mcp', 'remove', '--scope', 'user', 'Multi-CLI'], serviceLogger);
+        await runBestEffort('claude', ['mcp', 'remove', '--scope', 'user', 'Sidekick'], serviceLogger);
       }
       try {
         unlinkSync(manifest.paths.serviceDefinition);
       } catch {}
       rmSync(manifest.paths.root, { recursive: true, force: true });
-      process.stdout.write('Uninstalled Multi-CLI service.\n');
+      process.stdout.write('Uninstalled Sidekick MCP service.\n');
       return;
     }
     case 'start': {
       const manifest = loadManifest(config);
       await registerService(manifest, serviceLogger);
       await waitForHealth(manifest, serviceLogger);
-      process.stdout.write(`Started Multi-CLI service at ${manifest.transport.url}\n`);
+      process.stdout.write(`Started Sidekick MCP service at ${manifest.transport.url}\n`);
       return;
     }
     case 'stop': {
       const manifest = loadManifest(config);
       await unregisterService(manifest, serviceLogger);
-      process.stdout.write('Stopped Multi-CLI service.\n');
+      process.stdout.write('Stopped Sidekick MCP service.\n');
       return;
     }
     case 'restart': {
@@ -408,7 +408,7 @@ export async function handleServiceCommand(
       await unregisterService(manifest, serviceLogger);
       await registerService(manifest, serviceLogger);
       await waitForHealth(manifest, serviceLogger);
-      process.stdout.write(`Restarted Multi-CLI service at ${manifest.transport.url}\n`);
+      process.stdout.write(`Restarted Sidekick MCP service at ${manifest.transport.url}\n`);
       return;
     }
     case 'status': {
@@ -436,7 +436,7 @@ export async function handleServiceCommand(
 
       process.stdout.write(
         [
-          'Multi-CLI Doctor',
+          'Sidekick MCP Doctor',
           `service kind: ${manifest.serviceKind}`,
           `service url: ${manifest.transport.url}`,
           `health: ${health}`,

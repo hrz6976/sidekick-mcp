@@ -5,31 +5,31 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 
-import { loadConfig, type MultiCliConfig } from './config.js';
+import { loadConfig, type SidekickConfig } from './config.js';
 import { createLogger, type Logger } from './logger.js';
 import {
   createServerApp,
   createServerRuntime,
   resolveWorkingDirectoryFromRoots,
-  type MultiCliRuntime,
-  type MultiCliServerApp,
-  type MultiCliSessionContext,
+  type SidekickRuntime,
+  type SidekickServerApp,
+  type SidekickSessionContext,
 } from './serverApp.js';
 
 interface HttpSessionRecord {
   readonly sessionId: string;
-  readonly app: MultiCliServerApp;
+  readonly app: SidekickServerApp;
   readonly transport: StreamableHTTPServerTransport;
   readonly logger: Logger;
-  readonly sessionContext: MultiCliSessionContext;
+  readonly sessionContext: SidekickSessionContext;
   lastActivityAt: number;
   idleTimer?: NodeJS.Timeout;
   closing: boolean;
 }
 
-export interface MultiCliHttpServer {
-  readonly config: MultiCliConfig;
-  readonly runtime: MultiCliRuntime;
+export interface SidekickHttpServer {
+  readonly config: SidekickConfig;
+  readonly runtime: SidekickRuntime;
   readonly url: string;
   readonly healthUrl: string;
   close(reason?: string): Promise<void>;
@@ -39,7 +39,7 @@ function isLoopbackHost(host: string): boolean {
   return host === '127.0.0.1' || host === 'localhost';
 }
 
-function validateHttpConfig(config: MultiCliConfig): void {
+function validateHttpConfig(config: SidekickConfig): void {
   if (!isLoopbackHost(config.httpHost)) {
     throw new Error(
       `HTTP host must be loopback-only. Received "${config.httpHost}".`,
@@ -52,7 +52,7 @@ function validateHttpConfig(config: MultiCliConfig): void {
 
   if (!config.httpAuthToken?.trim()) {
     throw new Error(
-      'HTTP auth token is required in HTTP mode. Set MULTICLI_HTTP_AUTH_TOKEN or install the managed service first.',
+      'HTTP auth token is required in HTTP mode. Set SIDEKICK_HTTP_AUTH_TOKEN or install the managed service first.',
     );
   }
 }
@@ -144,15 +144,15 @@ function createAuthMiddleware(
 }
 
 export async function startHttpServer(
-  config: MultiCliConfig = loadConfig(),
+  config: SidekickConfig = loadConfig(),
   rootLogger: Logger = createLogger({
     filePath: config.logPath,
     fileLevel: config.logLevel,
     stderrLevel: config.stderrLogLevel,
-    bindings: { component: 'multicli' },
+    bindings: { component: 'sidekick' },
   }),
-  runtime?: MultiCliRuntime,
-): Promise<MultiCliHttpServer> {
+  runtime?: SidekickRuntime,
+): Promise<SidekickHttpServer> {
   validateHttpConfig(config);
   const resolvedRuntime = runtime ?? await createServerRuntime(config, rootLogger);
 
@@ -264,7 +264,7 @@ export async function startHttpServer(
         return;
       }
 
-      const sessionContext: MultiCliSessionContext = {
+      const sessionContext: SidekickSessionContext = {
         transport: 'http',
         resolveWorkingDirectory: async (server, sessionResolveLogger) => resolveWorkingDirectoryFromRoots(
           server,

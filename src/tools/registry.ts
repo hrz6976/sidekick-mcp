@@ -21,6 +21,7 @@ export interface UnifiedTool {
   execute: (args: ToolArguments, context?: ToolExecutionContext) => Promise<string>;
   category?: 'gemini' | 'codex' | 'claude' | 'opencode' | 'utility';
   execution?: Tool['execution'];
+  annotations?: Tool['annotations'];
   timeoutClass?: ToolTimeoutClass;
 }
 
@@ -40,13 +41,7 @@ export function getToolDefinitions(subset?: UnifiedTool[]): Tool[] { // get Tool
       required: jsonSchema.required || [],
     };
 
-    // Derive MCP annotations from tool name
-    let annotations: Tool['annotations'] | undefined;
-    if (tool.name.startsWith('Ask-')) {
-      annotations = { openWorldHint: true, readOnlyHint: false, destructiveHint: false };
-    } else if (tool.name.startsWith('List-') || tool.name.endsWith('-Help') || tool.name === 'Fetch-Chunk' || tool.name === 'Claude-Gemini-Codex') {
-      annotations = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
-    }
+    const annotations = tool.annotations;
 
     return {
       name: tool.name,

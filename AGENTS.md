@@ -4,7 +4,7 @@ This file provides guidance to Claude Code, Google Gemini, OpenAI Codex, and oth
 
 ## Project Overview
 
-Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claude, Gemini, Codex) call each other as tools. Built with TypeScript and the `@modelcontextprotocol/sdk`. Runs over stdio transport. Published to npm as `@osanoai/multicli`.
+Sidekick — an MCP (Model Context Protocol) server that lets AI clients start Claude, Gemini, Codex, and OpenCode as task-based side agents. Built with TypeScript and the `@modelcontextprotocol/sdk`. Runs over stdio by default and can run over a loopback HTTP service. Published to npm as `@hrz6976/sidekick-mcp`.
 
 ## Workflow Orchestration
 
@@ -76,22 +76,19 @@ Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claud
 
 ## Build & Dev Commands
 
-- `npm run build` — compile TypeScript and copy `src/modelCatalog.generated.json` into `dist/`
+- `npm run build` — clean `dist/` and compile TypeScript
 - `npm run dev` — build then run (`tsc && node dist/index.js`)
 - `npm start` — run compiled server (`node dist/index.js`)
 - `npm run lint` — type-check without emitting (`tsc --noEmit`)
-- `npm run refresh-catalog` — run `scripts/refresh-catalog.ts` to regenerate the model catalog
-- `npm run prepublishOnly` — safety reminder + build before publish
-- `npm run prepare` — install Husky git hooks (`husky || true`)
+- `npm run test:e2e` — build and run a stdio MCP end-to-end smoke with fake CLIs
+- `npm run test:e2e:real` — build and run a real CLI/model smoke; this may consume provider quota
 
 ## Testing
 
 - `npm test` — run all tests (`vitest run`)
-- `npm run test:watch` — run tests in watch mode (`vitest`)
-- `npm run test:coverage` — run tests with coverage (`vitest run --coverage`)
 - **Framework**: Vitest 4.x with globals enabled
-- **Test files**: `tests/**/*.test.ts` (13 files, 194 tests)
-- **CI**: `.github/workflows/tests.yml` runs lint, build, and tests on Node 20, 22, and 24
+- **Test files**: `tests/**/*.test.ts`
+- **CI**: `.github/workflows/tests.yml` runs lint, build, unit/integration tests, and fake E2E on Node 20, 22, and 24
 - **Mocking**: `vi.mock()` for fs/os/child_process and internal modules; pure-logic modules tested without mocks
 
 ## Framework
@@ -99,8 +96,8 @@ Multi-CLI — an MCP (Model Context Protocol) server that lets AI clients (Claud
 - **Runtime**: Node.js >=20.0.0, ESM (`"type": "module"`)
 - **Language**: TypeScript 5.9.x (strict mode, target ES2022, module Node16)
 - **Core dependencies**: `@modelcontextprotocol/sdk` ^1.27.1 (MCP server + stdio transport), `zod` ^4.3.6 (tool argument schemas), `dotenv` ^17.3.1 (environment loading)
-- **Dev dependencies**: Vitest ^4.0.18 with V8 coverage, Husky ^9.1.7 for git hooks
-- **Architecture**: Dynamic tool registry pattern — tool definitions live in `src/tools/`, `initTools()` registers only CLIs detected on the machine, and `src/index.ts` wires MCP tool/prompt handlers, client-specific tool filtering, and progress notifications over stdio.
+- **Dev dependencies**: Vitest ^4.x and TypeScript ^5.9.x
+- **Architecture**: Config-driven Sidekick tool registry — missing config exposes only `setup`; configured mode exposes always-on `setup`, `ask_<agent>` tools, `list_agents`, and `cleanup_worktree`. Runner command construction lives in `src/runners/`, task metadata in `src/tasks/`, and worktree lifecycle in `src/worktrees/`.
 
 # Authorship
 All PRs and Commits to this repository must include a reference to "Claude, Codex, and Gemini" as the authors.
