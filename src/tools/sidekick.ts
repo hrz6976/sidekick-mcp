@@ -88,8 +88,10 @@ function firstModel(models: string[]): string | undefined {
   return models.find((model) => model.trim());
 }
 
-function findModel(models: string[], pattern: RegExp): string | undefined {
-  return models.find((model) => pattern.test(model));
+function preferOpenCodeModel(models: string[], pattern?: RegExp): string | undefined {
+  return models.find((model) =>
+    !model.startsWith('opencode/') && (!pattern || pattern.test(model)),
+  );
 }
 
 function modelDiscoveryDescription(runner: AgentConfig['runner']): string {
@@ -99,9 +101,9 @@ function modelDiscoveryDescription(runner: AgentConfig['runner']): string {
     case 'opencode':
       return '`opencode models` local provider-layer parsing; Sidekick never uses `--refresh` by default';
     case 'gemini':
-      return 'Sidekick built-in Gemini CLI aliases/candidates; Gemini CLI has no headless model-list command';
+      return 'Gemini CLI aliases only (`auto`, `pro`, `flash`, `flash-lite`); Gemini CLI has no headless model-list command';
     case 'claude':
-      return 'Sidekick built-in Claude Code aliases/candidates; Claude CLI has no headless model-list command';
+      return 'Claude Code aliases only (`sonnet`, `opus`, `haiku`) plus any full model name the user chooses; Claude CLI has no headless model-list command';
   }
 }
 
@@ -145,8 +147,8 @@ function buildRecommendedConfig(discovery: Array<{
 
   const opencode = byRunner.opencode;
   if (opencode?.installed) {
-    const deepseek = findModel(opencode.models, /deepseek/i);
-    const kimi = findModel(opencode.models, /kimi|moonshot/i);
+    const deepseek = preferOpenCodeModel(opencode.models, /deepseek/i);
+    const kimi = preferOpenCodeModel(opencode.models, /kimi|moonshot/i);
     if (deepseek) {
       agents.deepseek = {
         runner: 'opencode',
@@ -165,9 +167,10 @@ function buildRecommendedConfig(discovery: Array<{
       };
     }
     if (!deepseek && !kimi) {
+      const preferred = preferOpenCodeModel(opencode.models);
       agents.opencode = {
         runner: 'opencode',
-        ...(firstModel(opencode.models) ? { model: firstModel(opencode.models) } : {}),
+        ...(preferred ? { model: preferred } : {}),
         extraArgs: [],
         description: 'Ask a configured OpenCode provider/model.',
       };
@@ -210,7 +213,6 @@ async function setupPrompt(
       command: runner,
       installed,
       models,
-      modelHints: models,
       modelDiscovery: installed
         ? modelDiscoveryDescription(runner)
         : 'CLI not found on PATH',
@@ -229,7 +231,6 @@ async function setupPrompt(
         reasoningEffort: agentConfig.reasoningEffort,
         extraArgs: agentConfig.extraArgs,
         configuredModels: uniqueStrings([...(agentConfig.models ?? []), agentConfig.model]),
-        modelHints: agentConfig.enabled ? await safeListModels(agentConfig, context) : [],
       })))
     : [];
 
@@ -258,23 +259,26 @@ async function setupPrompt(
     jsonText(currentState),
     '',
     'Setup prompt for the current agent:',
-    '1. Read the discovery data above before editing config. Prefer installed runners, configured models, and modelHints with clear source labels.',
-    '2. If the config is missing, create it. If it is loaded, patch it instead of overwriting unrelated existing agents.',
-    '3. Each key in `agents` becomes an MCP tool named `ask_<key>`. Use memorable aliases such as gemini, claude, codex, deepseek, or kimi.',
-    '4. For each helper, set `runner` to one of claude, gemini, codex, or opencode. Use `model` for the model/provider id; do not put model flags in `extraArgs`.',
-    '5. Use config `reasoningEffort` for default effort controls. Ask tools also accept an `effort` argument to override it for one call.',
-    '6. Sidekick maps effort to Claude `--effort`, Codex `--config model_reasoning_effort=...`, and OpenCode `--variant`. Gemini CLI has no direct reasoning-effort flag.',
-    '7. Use `extraArgs` for other advanced CLI/model options such as thinking budgets, provider-specific flags, or approval tuning.',
-    '8. Gemini automatically gets `--skip-trust` from Sidekick. Only add Gemini `extraArgs` for extra behavior beyond that default.',
-    '9. Ask tools run in the MCP client project root when the client supports roots; otherwise they use the MCP server launch directory.',
-    '10. Read-only investigations usually do not need a worktree; call ask tools with `mode: "read-only"` and omit `worktree` to use the selected project directory without creating a worktree.',
-    '11. For edit or full-access tasks, prefer `worktree: "auto"` so helper agents work in an isolated worktree and avoid concurrent edits to the main checkout.',
-    '12. Codex model hints come from local `codex debug models --bundled`; OpenCode model hints come from local `opencode models`. Gemini and Claude use Sidekick built-in CLI aliases/candidates.',
-    '13. Do not describe modelHints as account-entitled models. They are local catalog entries, provider-layer discoveries, or built-in candidates until a real model call validates them.',
-    '14. Create or update the Sidekick home directory and config file:',
+    '1. Read the discovery data above before editing config. Treat `models` as local CLI output or aliases, not as verified account entitlements.',
+    '2. Before writing config, propose 2-4 concise configuration choices to the user and ask which they prefer. Use AskUserQuestion when available; otherwise ask in normal chat.',
+    '3. Good choices usually include a fast review helper, a stronger implementation helper, and any provider-specific OpenCode helpers found locally.',
+    '4. If the config is missing, create it. If it is loaded, patch it instead of overwriting unrelated existing agents.',
+    '5. Each key in `agents` becomes an MCP tool named `ask_<key>`. Use memorable aliases such as gemini, claude, codex, deepseek, or kimi.',
+    '6. For each helper, set `runner` to one of claude, gemini, codex, or opencode. Use `model` for the model/provider id; do not put model flags in `extraArgs`.',
+    '7. For Claude and Gemini, prefer CLI aliases unless the user explicitly asks for a full model name: Claude aliases are sonnet, opus, haiku; Gemini aliases are auto, pro, flash, flash-lite.',
+    '8. For OpenCode, do not choose models starting with `opencode/` by default; prefer real provider-prefixed models such as deepseek/..., moonshot/..., github-copilot/..., or another user-selected provider model.',
+    '9. Use config `reasoningEffort` for default effort controls. Ask tools also accept an `effort` argument to override it for one call.',
+    '10. Sidekick maps effort to Claude `--effort`, Codex `--config model_reasoning_effort=...`, and OpenCode `--variant`. Gemini CLI has no direct reasoning-effort flag.',
+    '11. Use `extraArgs` for other advanced CLI/model options such as thinking budgets, provider-specific flags, or approval tuning.',
+    '12. Gemini automatically gets `--skip-trust` from Sidekick. Only add Gemini `extraArgs` for extra behavior beyond that default.',
+    '13. Ask tools run in the MCP client project root when the client supports roots; otherwise they use the MCP server launch directory.',
+    '14. Read-only investigations usually do not need a worktree; call ask tools with `mode: "read-only"` and omit `worktree` to use the selected project directory without creating a worktree.',
+    '15. For edit or full-access tasks, prefer `worktree: "auto"` so helper agents work in an isolated worktree and avoid concurrent edits to the main checkout.',
+    '16. Codex models come from local `codex debug models --bundled`; OpenCode models come from local `opencode models`. Gemini and Claude entries are aliases only.',
+    '17. Create or update the Sidekick home directory and config file:',
     `   mkdir -p ${config.sidekickHome}`,
     `   write JSON to ${config.configPath}`,
-    '15. Use this recommended starter config as a base, then adjust aliases, models, reasoningEffort, and extraArgs to match the user request:',
+    '18. Use this recommended starter config as a base only after the user chooses a configuration direction:',
     '',
     jsonText(buildRecommendedConfig(runnerDiscovery)),
   ].join('\n');
@@ -445,7 +449,9 @@ export function createSidekickTools(
 
   const setupTool: UnifiedTool = {
     name: 'setup',
-    description: 'Inspect local Sidekick runner installation and model hints, then return an executable prompt for creating or updating Sidekick MCP configuration.',
+    description: config.userConfig
+      ? 'Review or update Sidekick configuration. Returns an executable prompt that should ask the user to choose helper-agent settings before editing config.'
+      : 'Sidekick is not configured yet. Call this tool first to generate an interactive setup prompt for creating Sidekick helper-agent configuration.',
     zodSchema: z.object({}),
     category: 'utility',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
@@ -457,31 +463,41 @@ export function createSidekickTools(
     },
   };
 
-  if (config.setupRequired || !config.userConfig) {
-    return [setupTool];
-  }
-
-  const askTools = Object.entries(config.userConfig.agents)
+  const askTools = config.userConfig ? Object.entries(config.userConfig.agents)
     .filter(([, agentConfig]) => agentConfig.enabled)
     .map(([agentName, agentConfig]) => createAskTool(
       config,
       metadataStore,
       agentName,
       agentConfig,
-    ));
+    )) : [];
 
   const listAgentsTool: UnifiedTool = {
     name: 'list_agents',
-    description: 'List configured Sidekick helper agents, their runners, installation status, defaults, and model hints.',
+    description: config.userConfig
+      ? 'List configured Sidekick helper agents, their runners, installation status, defaults, and configured models.'
+      : 'Sidekick is not configured yet. Call setup first; this tool reports the missing configuration state.',
     zodSchema: z.object({}),
     category: 'utility',
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     async execute(_args, context?: ToolExecutionContext) {
-      const userConfig = ensureConfigured(config);
+      if (!config.userConfig) {
+        return jsonText({
+          configStatus: config.configError ? 'invalid' : 'missing',
+          configPath: config.configPath,
+          configError: config.configError,
+          agents: [],
+          guidance: [
+            'Call setup to generate an interactive configuration prompt.',
+            'After setup writes config.json and the MCP server restarts or reloads, configured ask_<agent> tools will appear.',
+          ],
+        });
+      }
+
+      const userConfig = config.userConfig;
       const agents = await Promise.all(Object.entries(userConfig.agents).map(async ([agentName, agentConfig]) => {
-        const runner = getRunner(agentConfig.runner);
-        const modelHints = agentConfig.enabled
-          ? await runner.listModels(agentConfig, context)
+        const models = agentConfig.enabled
+          ? await getRunner(agentConfig.runner).listModels(agentConfig, context)
           : [];
         return {
           agent: agentName,
@@ -495,7 +511,7 @@ export function createSidekickTools(
           extraArgs: agentConfig.extraArgs,
           description: agentConfig.description,
           configuredModels: uniqueStrings([...(agentConfig.models ?? []), agentConfig.model]),
-          modelHints,
+          models,
         };
       }));
 
@@ -507,8 +523,8 @@ export function createSidekickTools(
           'Pass `effort` on an ask_<agent> call to override the configured reasoning effort for that one run.',
           'Use mode "read-only" for analysis. Read-only calls default to worktree "off".',
           'Use mode "edit" or "full-access" with worktree "auto" for implementation to avoid concurrent edits.',
-          'Codex model hints come from local `codex debug models --bundled`; OpenCode model hints come from local `opencode models` without `--refresh`.',
-          'Gemini and Claude model hints are Sidekick built-in CLI aliases/candidates, not account-entitled model lists.',
+          'Codex models come from local `codex debug models --bundled`; OpenCode models come from local `opencode models` without `--refresh`.',
+          'Gemini and Claude models are CLI aliases, not account-entitled model lists.',
         ],
       });
     },

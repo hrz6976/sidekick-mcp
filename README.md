@@ -3,10 +3,10 @@
 Sidekick is a task-based MCP server for asking configured local coding agents to help. The config file controls the public tool surface:
 
 - each configured agent becomes an `ask_<name>` tool, such as `ask_gemini`, `ask_deepseek`, or `ask_kimi`
-- `setup` is always available and returns a reconfiguration prompt with local runner/model discovery
-- `list_agents` reports configured agents, runners, installation status, defaults, and model hints
+- `setup` is always available and returns an interactive configuration prompt with local runner/model discovery
+- `list_agents` reports configured agents, runners, installation status, defaults, and models or aliases
 - `cleanup_worktree` removes Sidekick-managed worktrees recorded in task metadata
-- when no valid config exists, `setup` is the only exposed tool
+- when no valid config exists, call `setup` first; management tools remain visible
 
 ## Install
 
@@ -36,7 +36,7 @@ Use the same stdio command everywhere:
 npx -y @hrz6976/sidekick-mcp@latest
 ```
 
-After adding the server, call `setup` from the client. Sidekick will inspect local Claude, Gemini, Codex, and OpenCode availability and return a prompt for creating or updating `~/.sidekick/config.json`.
+After adding the server, call `setup` from the client. Sidekick will inspect local Claude, Gemini, Codex, and OpenCode availability and return a prompt that asks you to choose a helper-agent configuration before creating or updating `~/.sidekick/config.json`.
 
 Some clients namespace tools by MCP server name, so `setup` may appear as `sidekick_setup`, `ask_gemini` as `sidekick_ask_gemini`, and so on.
 
@@ -134,11 +134,13 @@ Sidekick reads JSON config from `~/.sidekick/config.json` by default. Override i
 
 Each key under `agents` becomes a tool named `ask_<key>`. The `runner` field selects the underlying CLI: `claude`, `gemini`, `codex`, or `opencode`. Keep model/provider ids in `model`; use config `reasoningEffort` for default effort levels and `extraArgs` for other advanced CLI options such as thinking budget, approval behavior, or provider-specific flags.
 
+For Claude and Gemini, use CLI aliases unless you intentionally need a full model name. Claude aliases are `sonnet`, `opus`, and `haiku`; Gemini aliases are `auto`, `pro`, `flash`, and `flash-lite`. For OpenCode, avoid `opencode/` models as defaults; choose a real provider-prefixed model such as `deepseek/...`, `moonshot/...`, or `github-copilot/...`.
+
 Ask tools also accept an `effort` argument for one-off overrides, for example `{ "prompt": "review this diff", "mode": "read-only", "effort": "high" }`. Effective effort maps to Claude `--effort`, Codex `--config model_reasoning_effort=...`, and OpenCode `--variant`. Gemini CLI does not currently expose a direct headless reasoning-effort flag; use Gemini settings or `extraArgs` for provider-specific thinking configuration.
 
 Gemini gets `--skip-trust` by default from Sidekick, so it does not need to be repeated in config.
 
-`setup` is always exposed. Use it after installing or removing CLIs, changing provider credentials, or wanting the calling agent to rewrite `~/.sidekick/config.json`. It returns current runner availability, configured agents, model hints, and a prompt that tells the calling agent how to create or patch the config. When the config file is missing or invalid, Sidekick starts in setup-only mode and exposes only `setup`.
+`setup` is always exposed. Use it after installing or removing CLIs, changing provider credentials, or wanting the calling agent to rewrite `~/.sidekick/config.json`. It returns current runner availability, configured agents, local model output or aliases, and a prompt that tells the calling agent to ask you which configuration to write. When the config file is missing or invalid, `setup`, `list_agents`, and `cleanup_worktree` remain visible; call `setup` first.
 
 ## Worktrees And Tasks
 
@@ -157,7 +159,7 @@ Worktree behavior:
 - Task metadata and logs are written under `~/.sidekick/tasks/<taskId>/`.
 - Worktrees are retained by default. Call `cleanup_worktree` after inspecting or merging results.
 
-Codex model hints come from local `codex debug models --bundled`. OpenCode model hints come from local `opencode models`; Sidekick does not call `opencode models --refresh`. Gemini and Claude model hints use Sidekick's built-in CLI aliases/candidates.
+Codex models come from local `codex debug models --bundled`. OpenCode models come from local `opencode models`; Sidekick does not call `opencode models --refresh`. Gemini and Claude entries are CLI aliases, not account-entitled model lists.
 
 ## Development
 

@@ -264,13 +264,13 @@ describe('runners', () => {
     expect(models).toEqual(['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex']);
   });
 
-  it('uses built-in model hints for Gemini and Claude', async () => {
+  it('uses built-in CLI aliases for Gemini and Claude', async () => {
     await expect(getRunner('gemini').listModels({
       runner: 'gemini',
       enabled: true,
       command: 'gemini',
       extraArgs: [],
-    })).resolves.toEqual(['auto', 'pro', 'flash', 'flash-lite', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview']);
+    })).resolves.toEqual(['auto', 'pro', 'flash', 'flash-lite']);
 
     await expect(getRunner('claude').listModels({
       runner: 'claude',

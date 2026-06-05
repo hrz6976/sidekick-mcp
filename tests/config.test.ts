@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
 
 describe('config', () => {
-  it('uses Sidekick home and setup-only mode when config is missing', () => {
+  it('uses Sidekick home and marks setup required when config is missing', () => {
     const home = mkdtempSync(path.join(os.tmpdir(), 'sidekick-config-missing-'));
     try {
       const config = loadConfig({ SIDEKICK_HOME: home });

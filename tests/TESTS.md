@@ -2,7 +2,7 @@
 
 Automated tests cover the Sidekick MCP contract:
 
-- setup-only mode exposes only `setup`
+- missing-config mode exposes `setup`, `list_agents`, and `cleanup_worktree`
 - configured mode exposes always-on `setup`, config-generated `ask_<agent>` tools, `list_agents`, and `cleanup_worktree`
 - `ask_<agent>` tools support MCP Tasks and ordinary direct calls
 - provider-specific progress rendering for Claude, Gemini, Codex, and OpenCode JSONL events

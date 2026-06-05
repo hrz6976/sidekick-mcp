@@ -129,12 +129,19 @@ describe('serverApp', () => {
     config = undefined;
   });
 
-  it('exposes only setup when config is missing', async () => {
+  it('exposes setup and management tools when config is missing', async () => {
     ({ app, client, config } = await createConnectedPair(createConfig(true)));
 
     const result = await client.listTools();
-    expect(result.tools.map((tool) => tool.name)).toEqual(['setup']);
+    expect(result.tools.map((tool) => tool.name)).toEqual([
+      'setup',
+      'list_agents',
+      'cleanup_worktree',
+    ]);
     expect(result.tools[0].annotations?.readOnlyHint).toBe(true);
+    expect(result.tools[0].description).toContain('Call this tool first');
+    expect(result.tools.find((tool) => tool.name === 'list_agents')?.description)
+      .toContain('Call setup first');
   });
 
   it('exposes the configured Sidekick tools with task metadata', async () => {
@@ -172,6 +179,9 @@ describe('serverApp', () => {
     expect(result.content[0].text).toContain('Current Sidekick discovery');
     expect(result.content[0].text).toContain('"configuredAgents"');
     expect(result.content[0].text).toContain('"runnerDiscovery"');
+    expect(result.content[0].text).not.toContain('"modelHints"');
+    expect(result.content[0].text).toContain('AskUserQuestion');
+    expect(result.content[0].text).toContain('do not choose models starting with `opencode/`');
     expect(result.content[0].text).toContain('patch it instead of overwriting');
   });
 
@@ -301,7 +311,8 @@ describe('serverApp', () => {
     expect(parsed.agents.find((agent: { agent: string }) => agent.agent === 'claude').model).toBe('sonnet');
     expect(parsed.agents.find((agent: { agent: string }) => agent.agent === 'deepseek').runner).toBe('opencode');
     expect(parsed.agents.find((agent: { agent: string }) => agent.agent === 'deepseek').reasoningEffort).toBe('high');
-    expect(parsed.agents.find((agent: { agent: string }) => agent.agent === 'claude').modelHints).toContain('sonnet');
+    expect(parsed.agents.find((agent: { agent: string; models: string[] }) => agent.agent === 'claude').models).toContain('sonnet');
+    expect(result.content[0].text).not.toContain('modelHints');
     expect(parsed.guidance.join('\n')).toContain('`opencode models` without `--refresh`');
   });
 

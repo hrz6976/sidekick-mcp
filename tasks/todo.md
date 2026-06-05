@@ -482,3 +482,31 @@
 - Recommended a structured model discovery schema with explicit source/confidence/cost/network/quota-risk/validation fields.
 - Recommended `setup` and `list_agents` accept `refresh`, `validate`, and optionally `includeMetadata`, all defaulting to false.
 - Wrote report: `conversations/2026-06-03-agent-task-mcp/model-discovery-research/opencode-general-model-discovery.md`.
+
+## Setup Tool Configuration UX Cleanup
+
+- [x] Inspect setup/model discovery implementation and existing tests.
+- [x] Experiment with local Claude and Gemini CLI model semantics.
+- [x] Remove redundant `modelHints` fields from setup/list_agents output.
+- [x] Replace hard-coded Claude/Gemini model hints with safer CLI-default guidance.
+- [x] Update setup prompt to instruct the calling agent to ask interactive configuration questions.
+- [x] Keep management tools visible when config is missing and guide users to call setup.
+- [x] Add/update tests and run verification.
+
+### Setup Tool Configuration UX Cleanup Review / Results
+
+- Local CLI checks:
+  - Claude Code 2.1.162 exposes `--model` aliases such as `sonnet` and `opus`, but no headless model-list command.
+  - Gemini CLI 0.43.0 exposes `--model` and aliases such as `auto`, `pro`, `flash`, and `flash-lite`, but no headless model-list command.
+- Removed redundant `modelHints` fields from setup/list_agents output; model information is now under `models` or `configuredModels`.
+- Kept Claude/Gemini model lists to aliases only.
+- Setup prompt now tells the calling agent to ask the user for a configuration choice before writing config, using AskUserQuestion when available.
+- Setup prompt now tells agents not to choose OpenCode models starting with `opencode/` by default.
+- Missing-config mode now exposes `setup`, `list_agents`, and `cleanup_worktree`; `list_agents` reports that setup should be called first.
+- Verification passed:
+  - `npm run lint`
+  - `npm test -- tests/serverApp.test.ts tests/tools/initTools.test.ts tests/runners.test.ts tests/config.test.ts`
+  - `npm test` (14 files / 118 tests)
+  - `npm run build`
+  - `npm run test:e2e`
+  - `git diff --check`

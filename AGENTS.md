@@ -97,7 +97,7 @@ Sidekick — an MCP (Model Context Protocol) server that lets AI clients start C
 - **Language**: TypeScript 5.9.x (strict mode, target ES2022, module Node16)
 - **Core dependencies**: `@modelcontextprotocol/sdk` ^1.27.1 (MCP server + stdio transport), `zod` ^4.3.6 (tool argument schemas), `dotenv` ^17.3.1 (environment loading)
 - **Dev dependencies**: Vitest ^4.x and TypeScript ^5.9.x
-- **Architecture**: Config-driven Sidekick tool registry — missing config exposes only `setup`; configured mode exposes always-on `setup`, `ask_<agent>` tools, `list_agents`, and `cleanup_worktree`. Runner command construction lives in `src/runners/`, task metadata in `src/tasks/`, and worktree lifecycle in `src/worktrees/`.
+- **Architecture**: Config-driven Sidekick tool registry — missing config exposes setup/management tools and instructs clients to call `setup`; configured mode exposes always-on `setup`, `ask_<agent>` tools, `list_agents`, and `cleanup_worktree`. Runner command construction lives in `src/runners/`, task metadata in `src/tasks/`, and worktree lifecycle in `src/worktrees/`.
 
 # Authorship
 All PRs and Commits to this repository must include a reference to "Claude, Codex, and Gemini" as the authors.

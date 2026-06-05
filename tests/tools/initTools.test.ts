@@ -82,13 +82,17 @@ describe('initTools', () => {
     toolRegistry.push(...savedRegistry);
   });
 
-  it('registers only setup when config is missing', async () => {
+  it('registers setup and management tools when config is missing', async () => {
     await initTools({
       sidekickConfig: createConfig({ setupRequired: true, userConfig: undefined }),
       cliDetectTimeoutMs: 100,
     });
 
-    expect(toolRegistry.map((tool) => tool.name)).toEqual(['setup']);
+    expect(toolRegistry.map((tool) => tool.name)).toEqual([
+      'setup',
+      'list_agents',
+      'cleanup_worktree',
+    ]);
     expect(getToolDefinitions()[0].annotations).toEqual({
       readOnlyHint: true,
       destructiveHint: false,

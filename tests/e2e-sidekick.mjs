@@ -119,13 +119,22 @@ try {
   {
     const { client, transport } = await connect(home, repo);
     const tools = await client.listTools();
-    assert.deepEqual(tools.tools.map((tool) => tool.name), ['setup']);
+    assert.deepEqual(tools.tools.map((tool) => tool.name), [
+      'setup',
+      'list_agents',
+      'cleanup_worktree',
+    ]);
     const setup = await client.callTool({ name: 'setup', arguments: {} }, CallToolResultSchema);
     assert.equal(setup.isError, false);
     assert.match(setup.content[0].text, /~\/\.sidekick\/config\.json|config\.json/);
     assert.match(setup.content[0].text, /ask_<key>/);
+    assert.match(setup.content[0].text, /AskUserQuestion/);
+    assert.match(setup.content[0].text, /opencode\//);
     assert.match(setup.content[0].text, /read-only/);
     assert.match(setup.content[0].text, /worktree/);
+    const missingAgents = await client.callTool({ name: 'list_agents', arguments: {} }, CallToolResultSchema);
+    assert.equal(missingAgents.isError, false);
+    assert.match(missingAgents.content[0].text, /Call setup/);
     await client.close();
     await transport.close();
   }

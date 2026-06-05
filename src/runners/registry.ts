@@ -5,7 +5,7 @@ import type { AgentRunner, RunRequest, RunResult } from './types.js';
 
 const FALLBACK_MODELS: Record<RunnerName, string[]> = {
   claude: ['sonnet', 'opus', 'haiku'],
-  gemini: ['auto', 'pro', 'flash', 'flash-lite', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview'],
+  gemini: ['auto', 'pro', 'flash', 'flash-lite'],
   codex: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex'],
   opencode: [],
 };
