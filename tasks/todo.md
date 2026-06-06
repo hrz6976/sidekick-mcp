@@ -1,5 +1,25 @@
 # Sidekick MCP Rewrite Todo
 
+## Tag-Only Release Workflow
+
+- [x] Remove push-to-main / workflow_dispatch release triggers.
+- [x] Remove decide-action job and automated version bump PR path.
+- [x] Trigger release only on pushed `v*` tags.
+- [x] Validate `github.ref_name` equals `v${package.json.version}` before tests and publish.
+- [x] Publish from the existing tag ref and create a GitHub Release for that tag.
+- [x] Update `AGENTS.md` release guidance.
+- [x] Run workflow verification checks.
+
+### Tag-Only Release Workflow Notes
+
+- `release.yml` now has one release intent: pushing a git tag.
+- The workflow no longer checks npm to decide whether to bump or publish.
+- A mismatched tag such as `v0.1.3` with `package.json` version `0.1.2` fails in `validate`.
+- The existing reusable `tests.yml` matrix still runs before publish.
+- Verification passed:
+  - `git diff --check -- .github/workflows/release.yml AGENTS.md tasks/lessons.md tasks/todo.md`
+  - Node workflow text check confirmed tag trigger only, no `workflow_dispatch`, no main branch trigger, no decide job, no bump PR path, package version read, tag comparison, and publish depends on tests.
+
 ## sidekick Command for Ensemble Skill
 
 - [x] Create a dedicated handoff thread for the sidekick command task.

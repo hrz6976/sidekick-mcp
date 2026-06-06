@@ -60,11 +60,10 @@ Sidekick — an MCP (Model Context Protocol) server that lets AI clients start C
 6. **Capture Lessons**: Record in `tasks/lessons.md` (create if needed)
 
 ### 8. Releases
-- The release workflow (`release.yml`) uses a **bump PR pattern** triggered on every push to `main` and on `workflow_dispatch`.
-- If the current `package.json` version is already published on npm, the workflow creates an automated `chore/version-bump` PR that increments the patch version and enables auto-merge.
-- If the current version is **not** on npm (e.g. after the bump PR merges, or after a manual major/minor bump), the workflow runs security scan + tests, then builds, publishes to npm with OIDC provenance, pushes a git tag, and creates a GitHub Release.
-- **Do not manually edit `package.json` version for patch releases** — the bump PR handles it automatically.
-- For intentional **major** or **minor** version bumps, manually update `package.json` version in your PR. Once merged to `main`, the workflow publishes that version directly (no bump PR needed).
+- The release workflow (`release.yml`) runs **only when a git tag is pushed**.
+- Release tags must be named `v${package.json.version}`. The workflow fails before publishing if the pushed tag and `package.json` version do not match exactly.
+- There is no automated version bump PR path. Humans decide the package version, commit it, then push the matching git tag.
+- When the tag/version check passes, the workflow runs the test matrix, builds, publishes to npm with OIDC provenance, and creates a GitHub Release for that existing tag.
 
 ## Core Principles
 
