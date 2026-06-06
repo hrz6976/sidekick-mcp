@@ -1,7 +1,11 @@
 import type { Logger } from './logger.js';
-import type { ListRootsResult } from '@modelcontextprotocol/sdk/types.js';
 
 export type ToolTimeoutClass = 'ask' | 'help' | 'none';
+
+export interface SidekickProjectRoot {
+  uri: string;
+  name?: string;
+}
 
 export interface ToolExecutionContext {
   signal?: AbortSignal;
@@ -9,7 +13,7 @@ export interface ToolExecutionContext {
   timeoutMs?: number;
   killGraceMs?: number;
   cwd?: string;
-  projectRoots?: ListRootsResult['roots'];
+  projectRoots?: SidekickProjectRoot[];
   env?: NodeJS.ProcessEnv;
   requestId?: string | number;
   taskId?: string;

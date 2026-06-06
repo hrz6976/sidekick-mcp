@@ -21,6 +21,15 @@ import {
   type CliProgressRenderer,
   type JsonObject,
 } from './progress.js';
+import {
+  agentTextStep,
+  agentToolStep,
+  objectValue as trajectoryObjectValue,
+  pathValue as trajectoryPathValue,
+  stringValue as trajectoryStringValue,
+  type BuildTrajectoryStepsRequest,
+  type TrajectoryStep,
+} from './trajectory.js';
 import type { RunRequest } from './types.js';
 
 const CLAUDE_EFFORTS = ['low', 'medium', 'high'] as const;
@@ -58,6 +67,52 @@ export class ClaudeRunner extends BaseRunner {
     return this.extractEvents(parseJsonLines(stdout)) ?? { answer: fallbackAnswer(stdout) };
   }
 
+  buildTrajectorySteps(request: BuildTrajectoryStepsRequest): TrajectoryStep[] {
+    const steps: TrajectoryStep[] = [];
+    for (const event of parseJsonLines(request.stdout)) {
+      const type = trajectoryStringValue(event.type);
+      const timestamp = trajectoryStringValue(event.timestamp) ?? request.fallbackTimestamp;
+      if (type === 'assistant') {
+        const content = event.content ?? trajectoryPathValue(event, ['message', 'content']);
+        const text = this.extractClaudeText(content);
+        if (text) {
+          steps.push(agentTextStep(request, text, timestamp, { kind: 'runner_message' }));
+        }
+        for (const call of this.extractClaudeToolCalls(content, steps.length)) {
+          steps.push(agentToolStep(request, { timestamp, ...call }));
+        }
+        continue;
+      }
+
+      if (type === 'tool_use') {
+        steps.push(agentToolStep(request, {
+          timestamp,
+          message: trajectoryStringValue(event.name) ?? 'Claude tool call',
+          callId: trajectoryStringValue(event.id) ?? `claude-tool-${steps.length + 1}`,
+          functionName: trajectoryStringValue(event.name) ?? 'tool_use',
+          arguments: trajectoryObjectValue(event.input) ?? {},
+        }));
+        continue;
+      }
+
+      if (type === 'tool_result') {
+        const content = this.extractClaudeText(event.content ?? event.result);
+        if (content) {
+          steps.push(agentTextStep(request, content, timestamp, { kind: 'runner_observation' }));
+        }
+        continue;
+      }
+
+      if (type === 'result') {
+        const text = trajectoryStringValue(event.result);
+        if (text) {
+          steps.push(agentTextStep(request, text, timestamp, { kind: 'runner_result' }));
+        }
+      }
+    }
+    return steps;
+  }
+
   createProgressRenderer(): CliProgressRenderer {
     return createJsonLineProgressRenderer('claude', (event) => this.renderProgressEvent(event));
   }
@@ -75,7 +130,7 @@ export class ClaudeRunner extends BaseRunner {
       '--verbose',
       '--permission-mode',
       claudePermissionMode(request.mode),
-    ], request.agentConfig.reasoningEffort);
+    ], request.agentConfig.effort);
     if (request.model) {
       args.push('--model', request.model);
     }
@@ -133,6 +188,51 @@ export class ClaudeRunner extends BaseRunner {
     }
 
     accumulator.append(getOutputString(content) ?? '');
+  }
+
+  private extractClaudeText(content: unknown): string {
+    if (typeof content === 'string') {
+      return content;
+    }
+    if (!Array.isArray(content)) {
+      return '';
+    }
+    return content
+      .flatMap((part) => {
+        const record = trajectoryObjectValue(part);
+        if (!record || record.type !== 'text') {
+          return [];
+        }
+        const text = trajectoryStringValue(record.text);
+        return text ? [text] : [];
+      })
+      .join('\n\n');
+  }
+
+  private extractClaudeToolCalls(content: unknown, offset: number): Array<{
+    message: string;
+    callId: string;
+    functionName: string;
+    arguments: Record<string, unknown>;
+  }> {
+    if (!Array.isArray(content)) {
+      return [];
+    }
+    const calls = [];
+    for (const part of content) {
+      const record = trajectoryObjectValue(part);
+      if (!record || (record.type !== 'tool_use' && record.type !== 'server_tool_use')) {
+        continue;
+      }
+      const functionName = trajectoryStringValue(record.name) ?? trajectoryStringValue(record.tool_name) ?? 'tool_use';
+      calls.push({
+        message: functionName,
+        callId: trajectoryStringValue(record.id) ?? `claude-tool-${offset + calls.length + 1}`,
+        functionName,
+        arguments: trajectoryObjectValue(record.input) ?? {},
+      });
+    }
+    return calls;
   }
 
   private renderProgressEvent(event: JsonObject): string[] {

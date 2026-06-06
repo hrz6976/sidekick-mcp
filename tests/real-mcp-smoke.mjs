@@ -94,7 +94,6 @@ try {
       prompt: `Reply with exactly ${marker} and no other text.`,
       mode: 'read-only',
       worktree: 'off',
-      title: 'real model smoke',
     };
 
     for await (const message of client.experimental.tasks.callToolStream({
@@ -131,7 +130,7 @@ try {
   }
 } finally {
   if (!failed && !process.env.SIDEKICK_KEEP_REAL_SMOKE) {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   } else {
     console.error(`Preserved real smoke temp dir: ${root}`);
   }

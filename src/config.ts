@@ -14,7 +14,7 @@ export interface AgentConfig {
   enabled: boolean;
   command: string;
   model?: string;
-  reasoningEffort?: string;
+  effort?: string;
   extraArgs: string[];
   models?: string[];
   description?: string;
@@ -124,8 +124,10 @@ function parseAgentConfig(alias: string, raw: unknown): AgentConfig {
     model: typeof record.model === 'string' && record.model.trim()
       ? record.model.trim()
       : undefined,
-    reasoningEffort: typeof record.reasoningEffort === 'string' && record.reasoningEffort.trim()
-      ? record.reasoningEffort.trim()
+    effort: typeof record.effort === 'string' && record.effort.trim()
+      ? record.effort.trim()
+      : typeof record.reasoningEffort === 'string' && record.reasoningEffort.trim()
+        ? record.reasoningEffort.trim()
       : undefined,
     extraArgs: parseStringArray(record.extraArgs),
     models: parseStringArray(record.models),

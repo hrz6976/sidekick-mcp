@@ -36,7 +36,7 @@ function createConfig(overrides: Partial<SidekickConfig> = {}): SidekickConfig {
           enabled: true,
           command: 'opencode',
           model: 'deepseek/deepseek-chat',
-          reasoningEffort: 'high',
+          effort: 'high',
           extraArgs: [],
         },
         gemini: {
@@ -131,6 +131,9 @@ describe('initTools', () => {
 
     expect(askDeepseek?.execution).toEqual({ taskSupport: 'optional' });
     expect(JSON.stringify(askDeepseek?.inputSchema)).toContain('"effort"');
+    expect(JSON.stringify(askDeepseek?.inputSchema)).toContain('"trajectory"');
+    expect(JSON.stringify(askDeepseek?.inputSchema)).toContain('Debug-only ATIF trajectory export');
+    expect(askDeepseek?.description).toContain('debug-only');
     expect(askDeepseek?.annotations).toEqual({
       readOnlyHint: false,
       destructiveHint: false,

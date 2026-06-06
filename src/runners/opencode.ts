@@ -24,6 +24,18 @@ import {
   type CliProgressRenderer,
   type JsonObject,
 } from './progress.js';
+import {
+  agentTextStep,
+  agentToolStep,
+  compactRecord,
+  millisToIso,
+  objectValue as trajectoryObjectValue,
+  pathValue as trajectoryPathValue,
+  stringValue as trajectoryStringValue,
+  stringifyTrajectoryValue,
+  type BuildTrajectoryStepsRequest,
+  type TrajectoryStep,
+} from './trajectory.js';
 import type { RunRequest } from './types.js';
 
 export class OpenCodeRunner extends BaseRunner {
@@ -41,7 +53,7 @@ export class OpenCodeRunner extends BaseRunner {
       agents.deepseek = {
         runner: 'opencode',
         model: deepseek,
-        reasoningEffort: 'high',
+        effort: 'high',
         extraArgs: [],
         description: 'Ask DeepSeek through OpenCode with high reasoning effort.',
       };
@@ -75,6 +87,54 @@ export class OpenCodeRunner extends BaseRunner {
     return this.extractEvents(parseJsonLines(stdout)) ?? { answer: fallbackAnswer(stdout) };
   }
 
+  buildTrajectorySteps(request: BuildTrajectoryStepsRequest): TrajectoryStep[] {
+    const steps: TrajectoryStep[] = [];
+    for (const event of parseJsonLines(request.stdout)) {
+      const type = trajectoryStringValue(event.type);
+      const part = trajectoryObjectValue(event.part);
+      const timestamp = millisToIso(event.timestamp) ?? request.fallbackTimestamp;
+      if (type === 'text') {
+        const text = trajectoryStringValue(part?.text ?? event.text);
+        if (text) {
+          steps.push(agentTextStep(request, text, timestamp, { kind: 'runner_message' }));
+        }
+        continue;
+      }
+
+      if (type === 'reasoning') {
+        const text = trajectoryStringValue(part?.text);
+        if (text) {
+          steps.push(agentTextStep(request, '(reasoning)', timestamp, {
+            kind: 'runner_reasoning',
+            reasoning_content: text,
+          }));
+        }
+        continue;
+      }
+
+      if (type === 'tool_use' && part) {
+        const state = trajectoryObjectValue(part.state) ?? {};
+        const callId = trajectoryStringValue(part.callID ?? part.id) ?? `opencode-tool-${steps.length + 1}`;
+        const functionName = trajectoryStringValue(part.tool) ?? 'tool_use';
+        steps.push(agentToolStep(request, {
+          timestamp,
+          message: functionName,
+          callId,
+          functionName,
+          arguments: trajectoryObjectValue(state.input) ?? {},
+          output: stringifyTrajectoryValue(state.output ?? trajectoryPathValue(state, ['metadata', 'output'])),
+          extra: compactRecord({
+            kind: 'runner_tool',
+            status: trajectoryPathValue(state, ['status']),
+            title: trajectoryPathValue(state, ['title']),
+            exit_code: trajectoryPathValue(state, ['metadata', 'exit']),
+          }),
+        }));
+      }
+    }
+    return steps;
+  }
+
   createProgressRenderer(): CliProgressRenderer {
     return createJsonLineProgressRenderer('opencode', (event) => this.renderProgressEvent(event));
   }
@@ -99,7 +159,7 @@ export class OpenCodeRunner extends BaseRunner {
       '--format',
       'json',
       '--thinking',
-    ], request.agentConfig.reasoningEffort);
+    ], request.agentConfig.effort);
     if (request.model) {
       args.push('--model', request.model);
     }

@@ -33,7 +33,7 @@ describe('config', () => {
           runner: 'opencode',
           command: 'opencode-dev',
           model: 'deepseek/deepseek-chat',
-          reasoningEffort: 'high',
+          effort: 'high',
           extraArgs: [],
           description: 'DeepSeek through OpenCode',
         },
@@ -52,8 +52,35 @@ describe('config', () => {
       expect(config.userConfig?.agents.deepseek?.runner).toBe('opencode');
       expect(config.userConfig?.agents.deepseek?.command).toBe('opencode-dev');
       expect(config.userConfig?.agents.deepseek?.model).toBe('deepseek/deepseek-chat');
-      expect(config.userConfig?.agents.deepseek?.reasoningEffort).toBe('high');
+      expect(config.userConfig?.agents.deepseek?.effort).toBe('high');
       expect(config.userConfig?.agents.deepseek?.extraArgs).toEqual([]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts legacy reasoningEffort as an alias for config effort', () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), 'sidekick-config-legacy-effort-'));
+    const configPath = path.join(home, 'config.json');
+    writeFileSync(configPath, JSON.stringify({
+      agents: {
+        deepseek: {
+          runner: 'opencode',
+          model: 'deepseek/deepseek-chat',
+          reasoningEffort: 'high',
+          extraArgs: [],
+        },
+      },
+      defaults: { mode: 'edit', worktree: 'auto' },
+    }), 'utf8');
+
+    try {
+      const config = loadConfig({
+        SIDEKICK_HOME: home,
+        SIDEKICK_CONFIG_PATH: configPath,
+      });
+
+      expect(config.userConfig?.agents.deepseek?.effort).toBe('high');
     } finally {
       rmSync(home, { recursive: true, force: true });
     }

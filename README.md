@@ -1,12 +1,16 @@
 # Sidekick MCP
 
-Sidekick is a task-based MCP server for asking configured local coding agents to help. The config file controls the public tool surface:
+Sidekick is a task-based MCP server and local `sidekick` command for asking configured coding agents to help. It can run Claude, Gemini, Codex, and OpenCode as side agents while keeping task metadata, logs, and optional worktrees under `~/.sidekick`.
+
+For MCP clients, the config file controls the public tool surface:
 
 - each configured agent becomes an `ask_<name>` tool, such as `ask_gemini`, `ask_deepseek`, or `ask_kimi`
 - `setup` is always available and returns an interactive configuration prompt with local runner/model discovery
 - `list_agents` reports configured agents, runners, installation status, defaults, and models or aliases
 - `cleanup_worktree` removes Sidekick-managed worktrees recorded in task metadata
 - when no valid config exists, call `setup` first; management tools remain visible
+
+For scripts and skills, the package also exposes a standalone `sidekick` CLI with MCP-free primitives: `setup`, `list`, `run`, and `cleanup`.
 
 ## Install
 
@@ -20,6 +24,12 @@ MCP stdio command:
 
 ```bash
 sidekick-mcp
+```
+
+Standalone CLI command:
+
+```bash
+sidekick
 ```
 
 Equivalent npx command:
@@ -98,6 +108,43 @@ Then run:
 opencode mcp list
 ```
 
+## Standalone `sidekick` CLI
+
+The standalone command is intended for local scripts and Codex skills such as `ensemble`. It uses the same `~/.sidekick/config.json` as the MCP server, but does not require an MCP client.
+
+```bash
+sidekick setup --json
+sidekick list --json
+sidekick run --agent gemini --prompt-file TASK.md --cwd . --mode read-only --worktree off --json
+sidekick cleanup --task-id sidekick-... --force --json
+```
+
+`sidekick run` also accepts `--prompt <text>` for ad hoc use, but `--prompt-file` is the safer choice for skill and script dispatch. If `--cwd` is omitted, Sidekick uses the current working directory.
+
+In human mode, `sidekick run` writes only the final answer to stdout. Progress goes to stderr. If a non-JSON run fails, stdout starts with:
+
+```text
+!!! ERROR OCCURRED !!!
+```
+
+With `--json`, stdout is a structured result containing `taskId`, `status`, `agent`, `runner`, `model`, `mode`, `worktree`, `logs`, `answer`, and optional `stats`.
+
+`sidekick run` has no default command timeout. It lets the underlying runner finish unless the parent process or caller terminates it.
+
+### Experimental Trajectory Export
+
+`sidekick run` can export an experimental ATIF v1.7 trajectory:
+
+```bash
+sidekick run --agent gemini --prompt-file TASK.md --json --trajectory
+sidekick run --agent gemini --prompt-file TASK.md --json --trajectory ./trajectory.json
+sidekick run --agent gemini --prompt-file TASK.md --json --trajectory=./trajectory.json
+```
+
+When `--trajectory` is present without a path, Sidekick writes `trajectory.json` into the task directory under `~/.sidekick/tasks/<taskId>/`. Explicit relative paths resolve against `--cwd`. JSON results include `logs.trajectory` when export is requested.
+
+Trajectory export records the prompt, best-effort runner steps parsed from stdout JSONL, final answer or error, Sidekick metadata, and final metrics when available. The runner-specific parsing lives with the Claude, Gemini, Codex, and OpenCode runner implementations.
+
 ## Configure
 
 Sidekick reads JSON config from `~/.sidekick/config.json` by default. Override it with `SIDEKICK_CONFIG_PATH`.
@@ -114,7 +161,7 @@ Sidekick reads JSON config from `~/.sidekick/config.json` by default. Override i
     "deepseek": {
       "runner": "opencode",
       "model": "deepseek/deepseek-chat",
-      "reasoningEffort": "high",
+      "effort": "high",
       "extraArgs": [],
       "description": "Ask DeepSeek through OpenCode with high reasoning effort."
     },
@@ -132,11 +179,13 @@ Sidekick reads JSON config from `~/.sidekick/config.json` by default. Override i
 }
 ```
 
-Each key under `agents` becomes a tool named `ask_<key>`. The `runner` field selects the underlying CLI: `claude`, `gemini`, `codex`, or `opencode`. Keep model/provider ids in `model`; use config `reasoningEffort` for default effort levels and `extraArgs` for other advanced CLI options such as thinking budget, approval behavior, or provider-specific flags.
+Each key under `agents` becomes a tool named `ask_<key>`. The `runner` field selects the underlying CLI: `claude`, `gemini`, `codex`, or `opencode`. Keep model/provider ids in `model`; use config `effort` for default effort levels and `extraArgs` for other advanced CLI options such as thinking budget, approval behavior, or provider-specific flags. Existing configs that still use `reasoningEffort` are accepted as a legacy alias, but new configs should use `effort`.
 
 For Claude and Gemini, use CLI aliases unless you intentionally need a full model name. Claude aliases are `sonnet`, `opus`, and `haiku`; Gemini aliases are `auto`, `pro`, `flash`, and `flash-lite`. For OpenCode, avoid `opencode/` models as defaults; choose a real provider-prefixed model such as `deepseek/...`, `moonshot/...`, or `github-copilot/...`.
 
 Ask tools also accept an `effort` argument for one-off overrides, for example `{ "prompt": "review this diff", "mode": "read-only", "effort": "high" }`. Effective effort maps to Claude `--effort` (`low`, `medium`, `high`), Codex `--config model_reasoning_effort=...` (`minimal`, `low`, `medium`, `high`), and OpenCode `--variant` with a simple variant name. Gemini CLI does not currently expose a direct headless reasoning-effort flag, so Gemini agents reject `effort`; use Gemini settings or `extraArgs` for provider-specific thinking configuration.
+
+Ask tools also accept an optional `trajectory` argument for debug-only ATIF export. Use `true` to write `trajectory.json` in the Sidekick task directory, or pass a string path to write there. This is intended for debugging traces, not normal helper-agent asks.
 
 Gemini gets `--skip-trust` by default from Sidekick, so it does not need to be repeated in config.
 
@@ -166,8 +215,9 @@ Codex models come from local `codex debug models --bundled`. OpenCode models com
 ```bash
 npm run lint
 npm test
-npm run test:e2e
 npm run build
+npm run test:sidekick:e2e
+npm run test:mcp:e2e
 ```
 
 Runtime requirements: Node.js 20 or newer.

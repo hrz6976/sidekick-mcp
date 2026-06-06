@@ -19,6 +19,15 @@ import {
   type CliProgressRenderer,
   type JsonObject,
 } from './progress.js';
+import {
+  agentTextStep,
+  agentToolStep,
+  objectValue as trajectoryObjectValue,
+  stringValue as trajectoryStringValue,
+  stringifyTrajectoryValue,
+  type BuildTrajectoryStepsRequest,
+  type TrajectoryStep,
+} from './trajectory.js';
 import type { RunRequest } from './types.js';
 
 function geminiApprovalMode(mode: SidekickMode): string {
@@ -53,6 +62,43 @@ export class GeminiRunner extends BaseRunner {
 
   extractOutput(stdout: string): ExtractedRunOutput {
     return this.extractEvents(parseJsonLines(stdout)) ?? { answer: fallbackAnswer(stdout) };
+  }
+
+  buildTrajectorySteps(request: BuildTrajectoryStepsRequest): TrajectoryStep[] {
+    const steps: TrajectoryStep[] = [];
+    for (const event of parseJsonLines(request.stdout)) {
+      const type = trajectoryStringValue(event.type);
+      const timestamp = trajectoryStringValue(event.timestamp) ?? request.fallbackTimestamp;
+      if (type === 'message' && event.role === 'assistant') {
+        const text = trajectoryStringValue(event.content);
+        if (text) {
+          steps.push(agentTextStep(request, text, timestamp, { kind: 'runner_message' }));
+        }
+        continue;
+      }
+
+      if (type === 'tool_use') {
+        steps.push(agentToolStep(request, {
+          timestamp,
+          message: trajectoryStringValue(event.name) ?? 'Gemini tool call',
+          callId: trajectoryStringValue(event.id) ?? `gemini-tool-${steps.length + 1}`,
+          functionName: trajectoryStringValue(event.name) ?? 'tool_use',
+          arguments: trajectoryObjectValue(event.args) ?? trajectoryObjectValue(event.arguments) ?? {},
+        }));
+        continue;
+      }
+
+      if (type === 'tool_result') {
+        const content = stringifyTrajectoryValue(event.result ?? event.content);
+        if (content) {
+          steps.push(agentTextStep(request, content, timestamp, {
+            kind: 'runner_observation',
+            tool_name: event.name,
+          }));
+        }
+      }
+    }
+    return steps;
   }
 
   createProgressRenderer(): CliProgressRenderer {

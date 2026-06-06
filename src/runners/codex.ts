@@ -23,6 +23,15 @@ import {
   type CliProgressRenderer,
   type JsonObject,
 } from './progress.js';
+import {
+  agentTextStep,
+  agentToolStep,
+  compactRecord,
+  objectValue,
+  stringValue,
+  type BuildTrajectoryStepsRequest,
+  type TrajectoryStep,
+} from './trajectory.js';
 import type { RunRequest } from './types.js';
 
 const CODEX_EFFORTS = ['minimal', 'low', 'medium', 'high'] as const;
@@ -59,6 +68,60 @@ export class CodexRunner extends BaseRunner {
     return this.extractEvents(parseJsonLines(stdout)) ?? { answer: fallbackAnswer(stdout) };
   }
 
+  buildTrajectorySteps(request: BuildTrajectoryStepsRequest): TrajectoryStep[] {
+    const steps: TrajectoryStep[] = [];
+    for (const event of parseJsonLines(request.stdout)) {
+      const item = objectValue(event.item);
+      if (!item) {
+        continue;
+      }
+
+      const timestamp = stringValue(event.timestamp) ?? request.fallbackTimestamp;
+      if (item.type === 'agent_message') {
+        const text = stringValue(item.text);
+        if (text) {
+          steps.push(agentTextStep(request, text, timestamp, { kind: 'runner_message', event_type: event.type }));
+        }
+        continue;
+      }
+
+      if (item.type === 'command_execution') {
+        const command = stringValue(item.command) ?? '';
+        const callId = stringValue(item.id) ?? `codex-command-${steps.length + 1}`;
+        steps.push(agentToolStep(request, {
+          timestamp,
+          message: command ? `Run command: ${command}` : 'Run command',
+          callId,
+          functionName: 'command_execution',
+          arguments: command ? { command } : {},
+          output: stringValue(item.aggregated_output),
+          extra: compactRecord({
+            kind: 'runner_tool',
+            status: item.status,
+            exit_code: item.exit_code,
+          }),
+        }));
+        continue;
+      }
+
+      if (item.type === 'mcp_tool_call') {
+        const callId = stringValue(item.id) ?? `codex-mcp-${steps.length + 1}`;
+        const server = stringValue(item.server);
+        const tool = stringValue(item.tool);
+        steps.push(agentToolStep(request, {
+          timestamp,
+          message: [server, tool].filter(Boolean).join('.') || 'MCP tool call',
+          callId,
+          functionName: [server, tool].filter(Boolean).join('.') || 'mcp_tool_call',
+          arguments: objectValue(item.arguments) ?? {},
+          output: stringValue(item.output),
+          extra: compactRecord({ kind: 'runner_tool', status: item.status }),
+        }));
+      }
+    }
+    return steps;
+  }
+
   createProgressRenderer(): CliProgressRenderer {
     return createJsonLineProgressRenderer('codex', (event) => this.renderProgressEvent(event));
   }
@@ -77,7 +140,7 @@ export class CodexRunner extends BaseRunner {
       '--sandbox',
       codexSandbox(request.mode),
       '--skip-git-repo-check',
-    ], request.agentConfig.reasoningEffort);
+    ], request.agentConfig.effort);
     if (request.model) {
       args.push('--model', request.model);
     }

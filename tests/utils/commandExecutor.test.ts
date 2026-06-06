@@ -12,6 +12,8 @@ vi.mock('child_process', () => ({
 import { executeCommand, sanitizeArgForCmd } from '../../src/utils/commandExecutor.js';
 import { createLogger } from '../../src/logger.js';
 
+const isWindows = process.platform === 'win32';
+
 function createMockProcess() {
   const proc = {
     pid: 123,
@@ -41,6 +43,21 @@ function createMockProcess() {
       handlers['error']?.(err);
     },
   };
+}
+
+function expectTerminated(processKill: ReturnType<typeof vi.spyOn>, force = false) {
+  if (isWindows) {
+    expect(spawn).toHaveBeenCalledWith(
+      'taskkill',
+      force ? ['/pid', '123', '/T', '/F'] : ['/pid', '123', '/T'],
+      {
+        stdio: ['ignore', 'ignore', 'ignore'],
+        shell: false,
+      },
+    );
+  } else {
+    expect(processKill).toHaveBeenCalledWith(-123, force ? 'SIGKILL' : 'SIGTERM');
+  }
 }
 
 describe('commandExecutor', () => {
@@ -137,10 +154,10 @@ describe('commandExecutor', () => {
       vi.advanceTimersByTime(5000);
 
       await expect(promise).rejects.toThrow('Command timed out after 5000ms');
-      expect(processKill).toHaveBeenCalledWith(-123, 'SIGTERM');
+      expectTerminated(processKill);
 
       vi.advanceTimersByTime(250);
-      expect(processKill).toHaveBeenCalledWith(-123, 'SIGKILL');
+      expectTerminated(processKill, true);
     } finally {
       processKill.mockRestore();
       vi.useRealTimers();
@@ -158,7 +175,7 @@ describe('commandExecutor', () => {
       controller.abort();
 
       await expect(promise).rejects.toThrow('Command cancelled');
-      expect(processKill).toHaveBeenCalledWith(-123, 'SIGTERM');
+      expectTerminated(processKill);
     } finally {
       processKill.mockRestore();
     }
@@ -218,7 +235,7 @@ describe('commandExecutor', () => {
       mock.emitStderr('RESOURCE_EXHAUSTED: quota exceeded');
 
       await expect(promise).rejects.toThrow('quota exhaustion');
-      expect(processKill).toHaveBeenCalledWith(-123, 'SIGTERM');
+      expectTerminated(processKill);
     } finally {
       processKill.mockRestore();
     }

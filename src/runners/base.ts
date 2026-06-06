@@ -3,6 +3,7 @@ import type { ToolExecutionContext } from '../execution.js';
 import { executeCommand } from '../utils/commandExecutor.js';
 import type { ExtractedRunOutput } from './output.js';
 import type { CliProgressRenderer } from './progress.js';
+import type { BuildTrajectoryStepsRequest, TrajectoryStep } from './trajectory.js';
 import type { AgentRunner, RunRequest, RunResult } from './types.js';
 
 export abstract class BaseRunner implements AgentRunner {
@@ -46,6 +47,10 @@ export abstract class BaseRunner implements AgentRunner {
   abstract extractOutput(stdout: string): ExtractedRunOutput;
   abstract createProgressRenderer(): CliProgressRenderer;
   abstract validateEffort(effort?: string): void;
+
+  buildTrajectorySteps(_request: BuildTrajectoryStepsRequest): TrajectoryStep[] {
+    return [];
+  }
 
   recommendedAgents(models: string[]): Record<string, unknown> {
     const model = models.find((candidate) => candidate.trim());

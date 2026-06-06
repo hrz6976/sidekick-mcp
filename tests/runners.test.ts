@@ -137,15 +137,15 @@ describe('runners', () => {
     expect(getRunner('opencode').buildArgs(request({ agent: 'opencode', model: '' }))).not.toContain('--model');
   });
 
-  it('maps reasoningEffort to runner-specific CLI flags', () => {
+  it('maps effort to runner-specific CLI flags', () => {
     const claudeArgs = getRunner('claude').buildArgs(request({
       agent: 'claude',
-      agentConfig: { ...agentConfig, runner: 'claude', reasoningEffort: 'high' },
+      agentConfig: { ...agentConfig, runner: 'claude', effort: 'high' },
     }));
     expect(claudeArgs).toEqual(expect.arrayContaining(['--effort', 'high']));
 
     const codexArgs = getRunner('codex').buildArgs(request({
-      agentConfig: { ...agentConfig, reasoningEffort: 'high' },
+      agentConfig: { ...agentConfig, effort: 'high' },
     }));
     expect(codexArgs).toEqual(expect.arrayContaining([
       '--config',
@@ -154,13 +154,13 @@ describe('runners', () => {
 
     const opencodeArgs = getRunner('opencode').buildArgs(request({
       agent: 'opencode',
-      agentConfig: { ...agentConfig, runner: 'opencode', reasoningEffort: 'max' },
+      agentConfig: { ...agentConfig, runner: 'opencode', effort: 'max' },
     }));
     expect(opencodeArgs).toEqual(expect.arrayContaining(['--variant', 'max']));
 
     const geminiArgs = getRunner('gemini').buildArgs(request({
       agent: 'gemini',
-      agentConfig: { ...agentConfig, runner: 'gemini', reasoningEffort: 'high' },
+      agentConfig: { ...agentConfig, runner: 'gemini', effort: 'high' },
     }));
     expect(geminiArgs).not.toContain('--effort');
     expect(geminiArgs).not.toContain('--variant');
@@ -173,7 +173,7 @@ describe('runners', () => {
       agentConfig: {
         ...agentConfig,
         runner: 'claude',
-        reasoningEffort: 'high',
+        effort: 'high',
         extraArgs: ['--effort', 'low'],
       },
     }));
@@ -184,7 +184,7 @@ describe('runners', () => {
     const codexArgs = getRunner('codex').buildArgs(request({
       agentConfig: {
         ...agentConfig,
-        reasoningEffort: 'high',
+        effort: 'high',
         extraArgs: ['--config', 'model_reasoning_effort="low"'],
       },
     }));
@@ -197,7 +197,7 @@ describe('runners', () => {
       agentConfig: {
         ...agentConfig,
         runner: 'opencode',
-        reasoningEffort: 'high',
+        effort: 'high',
         extraArgs: ['--variant', 'low'],
       },
     }));
@@ -335,7 +335,7 @@ describe('runners', () => {
       deepseek: {
         runner: 'opencode',
         model: 'deepseek/deepseek-chat',
-        reasoningEffort: 'high',
+        effort: 'high',
         extraArgs: [],
         description: 'Ask DeepSeek through OpenCode with high reasoning effort.',
       },

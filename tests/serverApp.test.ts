@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { CallToolResultSchema, CreateTaskResultSchema } from '@modelcontextprotocol/sdk/types.js';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -60,7 +60,7 @@ function createConfig(setupRequired = false): SidekickConfig {
               enabled: true,
               command: 'opencode',
               model: 'deepseek/deepseek-chat',
-              reasoningEffort: 'high',
+              effort: 'high',
               extraArgs: [],
             },
           },
@@ -155,6 +155,8 @@ describe('serverApp', () => {
       .toContain('read-only');
     expect(result.tools.find((tool) => tool.name === 'ask_claude')?.description)
       .toContain('worktree "auto"');
+    expect(result.tools.find((tool) => tool.name === 'ask_claude')?.description)
+      .toContain('debug-only');
   });
 
   it('keeps setup available after configuration and returns reconfiguration guidance', async () => {
@@ -250,6 +252,29 @@ describe('serverApp', () => {
     expect(parsed).not.toHaveProperty('stdout');
     expect(parsed.logs.stdout).toContain(config!.taskRootDir);
     expect(executeCommand).toHaveBeenCalled();
+  });
+
+  it('supports debug-only trajectory export from direct ask tool calls', async () => {
+    ({ app, client, config } = await createConnectedPair());
+    vi.mocked(executeCommand).mockResolvedValue('trajectory response');
+
+    const result = await client.callTool(
+      {
+        name: 'ask_claude',
+        arguments: { prompt: 'hello trajectory', worktree: 'off', trajectory: true },
+      },
+      CallToolResultSchema,
+    );
+
+    expect(result.isError).toBe(false);
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.logs.trajectory).toBe(path.join(config!.taskRootDir, parsed.taskId, 'trajectory.json'));
+    expect(existsSync(parsed.logs.trajectory)).toBe(true);
+    const trajectory = JSON.parse(readFileSync(parsed.logs.trajectory, 'utf8'));
+    expect(trajectory.schema_version).toBe('ATIF-v1.7');
+    expect(trajectory.extra.status).toBe('completed');
+    expect(trajectory.steps[0].message).toBe('hello trajectory');
+    expect(trajectory.steps.at(-1).message).toBe('trajectory response');
   });
 
   it('lets ask tool calls override reasoning effort for one run', async () => {
@@ -389,7 +414,7 @@ describe('serverApp', () => {
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.agents.find((agent: { agent: string }) => agent.agent === 'claude').model).toBe('sonnet');
     expect(parsed.agents.find((agent: { agent: string }) => agent.agent === 'deepseek').runner).toBe('opencode');
-    expect(parsed.agents.find((agent: { agent: string }) => agent.agent === 'deepseek').reasoningEffort).toBe('high');
+    expect(parsed.agents.find((agent: { agent: string }) => agent.agent === 'deepseek').effort).toBe('high');
     expect(parsed.agents.find((agent: { agent: string; models: string[] }) => agent.agent === 'claude').models).toContain('sonnet');
     expect(result.content[0].text).not.toContain('modelHints');
     expect(parsed.guidance.join('\n')).toContain('`opencode models` without `--refresh`');

@@ -8,7 +8,6 @@ export type SidekickTaskStatus = 'running' | 'completed' | 'failed' | 'cancelled
 
 export interface SidekickTaskMetadata {
   taskId: string;
-  title?: string;
   status: SidekickTaskStatus;
   agent: string;
   runner: RunnerName;

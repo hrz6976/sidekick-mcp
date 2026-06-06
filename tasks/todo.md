@@ -1,5 +1,132 @@
 # Sidekick MCP Rewrite Todo
 
+## sidekick Command for Ensemble Skill
+
+- [x] Create a dedicated handoff thread for the sidekick command task.
+- [x] Record the MCP-vs-CLI correction in `tasks/lessons.md`.
+- [x] Check worktree status before edits.
+- [x] Run a baseline verification signal and record the dependency/tooling issue.
+- [x] Restore local dependency baseline if needed.
+- [x] Add a MCP-free Sidekick core API for setup/list/run/cleanup.
+- [x] Refactor MCP tools to reuse core behavior where practical without changing public MCP behavior.
+- [x] Add `src/cli.ts` with `setup`, `list`, `run`, and `cleanup` commands.
+- [x] Add esbuild-based single-file `dist/sidekick.mjs` build and npm scripts.
+- [x] Copy the bundled CLI to the ensemble skill `bin/` directory.
+- [x] Update the ensemble skill instructions to use the bundled CLI primitive.
+- [x] Add unit tests for core behavior, CLI parsing/errors, and MCP-free import boundaries.
+- [x] Add bundled CLI E2E with fake CLIs.
+- [x] Add bundled CLI real-model smoke test.
+- [x] Run full verification: lint, tests, build, MCP E2E, CLI E2E, real CLI smoke, and bundle smoke.
+- [x] Add review/results and write final handoff note.
+
+### sidekick Command Implementation Notes
+
+- `sidekick` is a low-level CLI primitive for the `ensemble` skill, not an ensemble orchestrator.
+- Keep `~/.sidekick/config.json` and `SIDEKICK_*` env compatibility.
+- The CLI path must not import `serverApp.ts`, `tools/registry.ts`, `tasks/protocolTaskStore.ts`, or `@modelcontextprotocol/sdk`.
+- Primary distribution artifact is `C:\Users\hrz\.agents\skills\ensemble\bin\sidekick.mjs`.
+- Public effort controls use `effort` consistently across config, CLI, MCP, and results; legacy config `reasoningEffort` is still accepted as an alias.
+
+### sidekick Command for Ensemble Skill Review / Results
+
+- Implemented `sidekick` CLI commands:
+  - `setup [--json]`
+  - `list --json`
+  - `run --agent <name> (--prompt-file <path> | --prompt <text>) [--cwd <path>] [--mode ...] [--worktree ...] [--json]`
+  - `cleanup (--task-id <id> | --worktree-id <id>) [--force] [--json]`
+- Replaced the initial broad core file with domain modules under `src/core/`: setup discovery, agent listing, run lifecycle, cleanup, and shared helpers.
+- Existing MCP tools now delegate to the same core APIs while preserving generated tool names and result shape.
+- Added `sidekick` npm bin and `dist/sidekick.mjs` bundle via esbuild; copied latest bundle to `C:\Users\hrz\.agents\skills\ensemble\bin\sidekick.mjs`.
+- Updated the `ensemble` skill to prefer `node {skill_dir}/bin/sidekick.mjs list/run` and keep MCP/tool discovery as fallback.
+- Added tests:
+  - `tests/cli.test.ts`
+  - `tests/core.test.ts`
+  - `tests/e2e-sidekick-command.mjs`
+  - `tests/real-sidekick-command-smoke.mjs`
+  - source-boundary checks for MCP-free CLI/core imports and separated core domains.
+- Verification passed:
+  - `npm run lint`
+  - `npm test` (15 files / 121 tests)
+  - `npm run build`
+  - `npm run test:sidekick:e2e` (`SIDEKICK_COMMAND_E2E_OK`)
+  - `npm run test:e2e` (`SIDEKICK_E2E_OK`)
+  - `npm run test:sidekick:e2e:real` (`SIDEKICK_REAL_COMMAND_SMOKE_OK agent=claude model=sonnet`)
+  - `npm run copy:ensemble-sidekick`
+  - `git diff --check` passed with only CRLF normalization warnings.
+- Additional real-smoke note: explicit Codex real CLI smoke was attempted and failed before model execution because the local WindowsApps Codex executable returns `Access is denied`; Claude real smoke passed.
+- Follow-up UX fix: `sidekick run` now streams progress to stderr (`[sidekick] Starting ...`, runner progress messages, and completion/failure), while stdout remains pure JSON for `ensemble` parsing. `--no-progress` disables terminal progress. Verified with `npm run lint`, `npm test -- tests/cli.test.ts`, `npm run test:sidekick:e2e`, `npm test`, and `npm run copy:ensemble-sidekick`.
+- Timeout clarification: `sidekick run` intentionally has no default command timeout. `runSidekickAgent` does not set `timeoutMs`, and `executeCommand` only starts a timer when a positive timeout is provided. Added a regression assertion in `tests/core.test.ts` and documented this in the `ensemble` skill instructions.
+- Human output correction: `sidekick run` without `--json` now writes only the final `answer` to stdout. Non-JSON failures write `!!! ERROR OCCURRED !!!\n{error}` to stdout. `--json` preserves structured result/error JSON. Verified with `npm run lint`, `npm run test:sidekick:e2e`, and `npm run copy:ensemble-sidekick`.
+- Removed unused `title` parameter: it only flowed into task metadata and was never used for prompts, runner args, progress, cleanup, or display. Removed it from MCP ask schema, sidekick command args, core/run coordinator requests, metadata type, and real smoke tests. Verified with `npm run lint`, focused tests, `npm run test:sidekick:e2e`, `npm run test:mcp:e2e`, and `npm run copy:ensemble-sidekick`.
+
+## Experimental Trajectory Export
+
+- [x] Read Harbor ATIF schema/model examples and Sidekick handoff context.
+- [x] Record the `--atif` to `--trajectory [path]` correction in `tasks/lessons.md`.
+- [x] Add MCP-free trajectory/ATIF types and builder under the runner domain.
+- [x] Add `sidekick run --trajectory [path]` parsing and export wiring.
+- [x] Include `logs.trajectory` in JSON results when export is requested.
+- [x] Write error trajectories for failed runs when export is requested.
+- [x] Add/update unit tests for parsing and ATIF generation.
+- [x] Add/update sidekick command E2E for default path, explicit path, human mode, and failure.
+- [x] Update real sidekick smoke to validate trajectory output.
+- [x] Run lint, unit tests, build, fake E2E, MCP E2E, real smoke, copy bundle, and diff checks.
+- [x] Add review/results and write final handoff note.
+
+### Experimental Trajectory Export Review / Results
+
+- Added `sidekick run --trajectory [path]` and `--trajectory=<path>`.
+- Omitting the flag writes no trajectory; passing the flag without a path writes `<taskDir>/trajectory.json`; explicit relative paths resolve against `--cwd`.
+- Public request typing now uses one field, `trajectory?: boolean | string`, instead of a split flag/path pair.
+- MCP `ask_<agent>` tools also expose optional `trajectory`; the tool description labels it experimental debug-only output.
+- Public effort naming was normalized to `effort`; config parsing still accepts old `reasoningEffort` for compatibility.
+- `--json` run results include `logs.trajectory` when trajectory export is requested. Human mode still writes only the answer to stdout.
+- Added MCP-free ATIF v1.7 types/builder/writer under `src/runners/trajectory.ts`; the CLI/core/trajectory path remains free of MCP-only imports.
+- Moved runner-specific trajectory step extraction into `src/runners/claude.ts`, `src/runners/codex.ts`, `src/runners/gemini.ts`, and `src/runners/opencode.ts`.
+- Renamed the experimental export module/tests from abbreviated wording to full `trajectory` naming.
+- Successful runs export prompt, best-effort runner steps from stdout JSONL, final answer, Sidekick metadata, and final token/cost metrics where available.
+- Runner failures after task creation export an error trajectory and keep the existing nonzero exit / human error banner behavior.
+- Copied the latest bundle to `C:\Users\hrz\.agents\skills\ensemble\bin\sidekick.mjs`.
+- Verification passed:
+  - `npm run lint`
+  - `npm test -- tests/cli.test.ts tests/trajectory.test.ts tests/core.test.ts tests/sourceBoundaries.test.ts`
+  - `npm run build`
+  - `npm test` (16 files / 125 tests)
+  - `npm run test:sidekick:e2e` (`SIDEKICK_COMMAND_E2E_OK`)
+  - `npm run test:mcp:e2e` (`SIDEKICK_E2E_OK`)
+  - `npm run test:sidekick:e2e:real` (`SIDEKICK_REAL_COMMAND_SMOKE_OK agent=claude model=sonnet`)
+  - `npm run copy:ensemble-sidekick`
+  - `git diff --check` passed with only CRLF normalization warnings.
+
+## v0.1.2 README / Tag Release
+
+- [x] Read latest sidekick CLI / trajectory handoff notes.
+- [x] Update README with standalone `sidekick` CLI usage, human/json output behavior, no default timeout, experimental trajectory export, and MCP debug-only `trajectory`.
+- [x] Bump package metadata from `0.1.1` to `0.1.2`.
+- [x] Run release verification.
+- [ ] Commit with required Claude, Codex, and Gemini authorship reference.
+- [ ] Create and push `v0.1.2`.
+
+### v0.1.2 README / Tag Release Notes
+
+- This release documents the newly bundled `sidekick` command alongside the existing MCP server.
+- The `sidekick` command uses the same `~/.sidekick/config.json` as MCP, but exposes MCP-free `setup`, `list`, `run`, and `cleanup` primitives.
+- README now documents that human `run` output is answer-only on stdout, progress uses stderr, JSON mode returns structured metadata, and `run` has no default timeout.
+- README now documents experimental ATIF v1.7 trajectory export through `--trajectory [path]` and MCP `trajectory?: boolean | string` for debug use.
+- README now documents config `effort` and notes `reasoningEffort` only as a legacy alias.
+- Public config, CLI, MCP, and results now use `effort` consistently. `reasoningEffort` remains only as a legacy config read alias.
+- Verification passed:
+  - `npm test -- tests/cli.test.ts tests/core.test.ts tests/tools/initTools.test.ts tests/serverApp.test.ts`
+  - `npm test -- tests/config.test.ts tests/runners.test.ts tests/cli.test.ts tests/core.test.ts tests/tools/initTools.test.ts tests/serverApp.test.ts`
+  - `npm run lint`
+  - `npm test` (16 files / 128 tests)
+  - `npm run build`
+  - `npm run test:sidekick:e2e` (`SIDEKICK_COMMAND_E2E_OK`)
+  - `npm run test:mcp:e2e` (`SIDEKICK_E2E_OK`)
+  - `npm run copy:ensemble-sidekick`
+  - `npm run copy:ensemble-sidekick` initially failed only when run in parallel with E2E build cleanup; a serial rerun passed.
+  - `git diff --check` passed with only CRLF normalization warnings.
+
 ## Phase 0 - Plan And Guardrails
 
 - [x] Read all handoff notes in `conversations/2026-06-03-agent-task-mcp/`.

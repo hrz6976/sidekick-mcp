@@ -3,6 +3,7 @@ import type { ToolExecutionContext } from '../execution.js';
 import type { WorktreeHandle } from '../worktrees/types.js';
 import type { ExtractedRunOutput } from './output.js';
 import type { CliProgressRenderer } from './progress.js';
+import type { BuildTrajectoryStepsRequest, TrajectoryStep } from './trajectory.js';
 
 export interface RunRequest {
   agent: RunnerName;
@@ -36,6 +37,7 @@ export interface AgentRunner {
   run(request: RunRequest): Promise<RunResult>;
   buildArgs(request: RunRequest): string[];
   extractOutput(stdout: string): ExtractedRunOutput;
+  buildTrajectorySteps(request: BuildTrajectoryStepsRequest): TrajectoryStep[];
   createProgressRenderer(): CliProgressRenderer;
   validateEffort(effort?: string): void;
 }

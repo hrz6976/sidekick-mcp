@@ -8,6 +8,16 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const repoRoot = process.cwd();
+const isWindows = process.platform === 'win32';
+
+function cleanupRoot(root) {
+  try {
+    rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch (error) {
+    console.error(`Preserved E2E temp dir because cleanup failed: ${root}`);
+    console.error(error);
+  }
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -26,8 +36,8 @@ function run(command, args, options = {}) {
 }
 
 function makeFakeCli(root) {
-  const fakeCli = path.join(root, 'fake-agent.mjs');
-  writeFileSync(fakeCli, `#!/usr/bin/env node
+  const fakeCliModule = path.join(root, 'fake-agent.mjs');
+  writeFileSync(fakeCliModule, `#!/usr/bin/env node
 const args = process.argv.slice(2);
 if (args.includes('--prompt')) {
   console.log(JSON.stringify({ type: 'message', role: 'assistant', content: 'fake gemini progress', delta: true }));
@@ -46,6 +56,16 @@ const payload = {
 };
 console.log(JSON.stringify(payload));
 `, 'utf8');
+  chmodSync(fakeCliModule, 0o700);
+
+  if (isWindows) {
+    const fakeCli = path.join(root, 'fake-agent.cmd');
+    writeFileSync(fakeCli, `@echo off\r\nnode "%~dp0fake-agent.mjs" %*\r\n`, 'utf8');
+    return fakeCli;
+  }
+
+  const fakeCli = path.join(root, 'fake-agent');
+  writeFileSync(fakeCli, `#!/usr/bin/env sh\nnode "${fakeCliModule}" "$@"\n`, 'utf8');
   chmodSync(fakeCli, 0o700);
   return fakeCli;
 }
@@ -256,5 +276,5 @@ try {
 
   console.log('SIDEKICK_E2E_OK');
 } finally {
-  rmSync(root, { recursive: true, force: true });
+  cleanupRoot(root);
 }

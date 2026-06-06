@@ -1,20 +1,28 @@
 {
   "name": "@hrz6976/sidekick-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Sidekick MCP server for launching Claude, Gemini, Codex, and OpenCode as task-based helper agents",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "sidekick-mcp": "dist/index.js"
+    "sidekick-mcp": "dist/index.js",
+    "sidekick": "dist/sidekick.mjs"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc && npm run build:sidekick",
+    "build:sidekick": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/sidekick.mjs --external:@modelcontextprotocol/sdk",
+    "copy:ensemble-sidekick": "npm run build:sidekick && node scripts/copy-ensemble-sidekick.mjs",
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
     "test": "vitest run",
-    "test:e2e": "npm run build && node tests/e2e-sidekick.mjs",
-    "test:e2e:real": "npm run build && node tests/real-model-smoke.mjs",
-    "test:e2e:real:all": "npm run build && node tests/real-model-smoke.mjs claude sonnet && node tests/real-model-smoke.mjs gemini && node tests/real-model-smoke.mjs codex && node tests/real-model-smoke.mjs opencode",
+    "test:sidekick:e2e": "npm run build && node tests/e2e-sidekick-command.mjs",
+    "test:sidekick:e2e:real": "npm run build && node tests/real-sidekick-command-smoke.mjs",
+    "test:mcp:e2e": "npm run build && node tests/e2e-sidekick-mcp.mjs",
+    "test:mcp:e2e:real": "npm run build && node tests/real-mcp-smoke.mjs",
+    "test:mcp:e2e:real:all": "npm run build && node tests/real-mcp-smoke.mjs claude sonnet && node tests/real-mcp-smoke.mjs gemini && node tests/real-mcp-smoke.mjs codex && node tests/real-mcp-smoke.mjs opencode",
+    "test:e2e": "npm run test:mcp:e2e",
+    "test:e2e:real": "npm run test:mcp:e2e:real",
+    "test:e2e:real:all": "npm run test:mcp:e2e:real:all",
     "lint": "tsc --noEmit"
   },
   "keywords": [
@@ -47,6 +55,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.3.3",
+    "esbuild": "^0.28.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.5"
   },
