@@ -29,6 +29,10 @@
     "llm"
   ],
   "author": "Claude, Codex, and Gemini",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hrz6976/sidekick-mcp"
+  },
   "engines": {
     "node": ">=20.0.0"
   },

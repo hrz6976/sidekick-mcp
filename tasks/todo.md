@@ -573,6 +573,8 @@
 - Pushed commit `31cd8ae` to `origin/main`; it triggered Release & Publish run `27057356219`.
 - Run `27057356219` correctly detected `0.1.0` was already published, but failed in the bump job because required GitHub App secrets were not configured: `APP_ID` / `APP_PRIVATE_KEY` caused `[@octokit/auth-app] appId option is required`.
 - Because the automated bump path is externally blocked, local package metadata was bumped with `npm version patch --no-git-tag-version` to `0.1.1`; pushing that follow-up commit should trigger the publish path directly because `0.1.1` is not on npm yet.
+- Pushed commit `ef7c5e1` to `origin/main`; Release & Publish run `27057438107` selected the publish path and passed the Node 20/22/24 test matrix, but npm publish failed with `E422` because provenance expected `package.json` `repository.url` to match `https://github.com/hrz6976/sidekick-mcp`.
+- Added package repository metadata with that exact URL; `0.1.1` remains unpublished, so a follow-up push should retry the publish path.
 
 ## Project Simplification
 
