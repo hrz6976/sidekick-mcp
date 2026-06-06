@@ -25,12 +25,11 @@ import {
   type Implementation,
   type ListRootsResult,
 } from "@modelcontextprotocol/sdk/types.js";
-import { PROTOCOL, ToolArguments } from "./constants.js";
 import { SidekickConfig, loadConfig } from "./config.js";
 import { ToolExecutionContext } from "./execution.js";
 import { Logger, createLogger } from "./logger.js";
-import { ManagedTaskStore } from "./taskStore.js";
 import { TaskMetadataStore } from "./tasks/metadataStore.js";
+import { ManagedTaskStore } from "./tasks/protocolTaskStore.js";
 import {
   getToolDefinitions,
   getPromptDefinitions,
@@ -41,9 +40,12 @@ import {
   initTools,
   getTool,
   validateToolArguments,
+  type ToolArguments,
 } from "./tools/index.js";
 import { CommandExecutionError } from "./utils/commandExecutor.js";
 import type { CliAvailability } from "./utils/cliDetector.js";
+
+const PROGRESS_NOTIFICATION_METHOD = 'notifications/progress';
 
 type HandlerExtra = RequestHandlerExtra<ServerRequest, ServerNotification>;
 type ProgressToken = string | number | undefined;
@@ -65,7 +67,7 @@ export interface SidekickSessionContext {
   rootUri?: string;
   projectRoots?: ListRootsResult['roots'];
   env?: NodeJS.ProcessEnv;
-  transport?: 'stdio' | 'http';
+  transport?: 'stdio';
   clientName?: string;
   resolveWorkingDirectory?: (
     server: Server,
@@ -278,7 +280,7 @@ function createProgressReporter(
       }
 
       await server.notification({
-        method: PROTOCOL.NOTIFICATIONS.PROGRESS,
+        method: PROGRESS_NOTIFICATION_METHOD,
         params,
       });
       lastNotificationAt = Date.now();

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createCliProgressRenderer } from '../src/runners/progress.js';
+import { getRunner } from '../src/runners/registry.js';
 
 describe('CLI progress renderer', () => {
   it('renders Claude stream-json events', () => {
-    const renderer = createCliProgressRenderer('claude');
+    const renderer = getRunner('claude').createProgressRenderer();
 
     expect(renderer.onChunk([
       JSON.stringify({ type: 'system', subtype: 'init', model: 'sonnet' }),
@@ -35,7 +35,7 @@ describe('CLI progress renderer', () => {
   });
 
   it('renders Gemini stream-json events', () => {
-    const renderer = createCliProgressRenderer('gemini');
+    const renderer = getRunner('gemini').createProgressRenderer();
 
     expect(renderer.onChunk([
       JSON.stringify({ type: 'init', model: 'gemini-2.5-pro' }),
@@ -53,7 +53,7 @@ describe('CLI progress renderer', () => {
   });
 
   it('renders current and legacy Codex JSON events', () => {
-    const renderer = createCliProgressRenderer('codex');
+    const renderer = getRunner('codex').createProgressRenderer();
 
     expect(renderer.onChunk([
       JSON.stringify({ type: 'thread.started', thread_id: 'thread-1' }),
@@ -98,7 +98,7 @@ describe('CLI progress renderer', () => {
   });
 
   it('renders OpenCode json events', () => {
-    const renderer = createCliProgressRenderer('opencode');
+    const renderer = getRunner('opencode').createProgressRenderer();
 
     expect(renderer.onChunk([
       JSON.stringify({ type: 'step_start', part: { type: 'step-start' } }),
@@ -129,7 +129,7 @@ describe('CLI progress renderer', () => {
   });
 
   it('buffers partial lines and falls back for non-json output', () => {
-    const renderer = createCliProgressRenderer('gemini');
+    const renderer = getRunner('gemini').createProgressRenderer();
 
     expect(renderer.onChunk('{"type":"message","role":"assistant"')).toEqual([]);
     expect(renderer.onChunk(',"content":"partial ok"}\nplain progress')).toEqual([

@@ -4,8 +4,8 @@ import path from 'node:path';
 
 export type SidekickLogLevel = 'error' | 'info' | 'debug';
 export type SidekickStderrLogLevel = SidekickLogLevel | 'silent';
-type SidekickTransport = 'stdio' | 'http';
-export type RunnerName = 'claude' | 'gemini' | 'codex' | 'opencode';
+export const RUNNER_NAMES = ['claude', 'gemini', 'codex', 'opencode'] as const;
+export type RunnerName = typeof RUNNER_NAMES[number];
 export type SidekickMode = 'read-only' | 'edit' | 'full-access';
 export type WorktreeMode = 'auto' | 'off';
 
@@ -29,18 +29,12 @@ interface SidekickUserConfig {
 }
 
 export interface SidekickConfig {
-  transport: SidekickTransport;
   cliDetectTimeoutMs: number;
   killGraceMs: number;
   taskTtlMs: number;
   taskPollIntervalMs: number;
   progressIdleHeartbeatMs: number;
   progressThrottleMs: number;
-  httpHost: string;
-  httpPort: number;
-  httpPath: string;
-  httpAuthToken?: string;
-  httpSessionIdleMs: number;
   logPath: string;
   logLevel: SidekickLogLevel;
   stderrLogLevel: SidekickStderrLogLevel;
@@ -48,16 +42,10 @@ export interface SidekickConfig {
   configPath: string;
   taskRootDir: string;
   worktreeRootDir: string;
-  serviceRootDir: string;
-  serviceLogPath: string;
-  serviceEnvPath: string;
-  serviceManifestPath: string;
   setupRequired: boolean;
   configError?: string;
   userConfig?: SidekickUserConfig;
 }
-
-const RUNNER_NAMES: RunnerName[] = ['claude', 'gemini', 'codex', 'opencode'];
 
 function getDefaultSidekickHome(): string {
   return path.join(os.homedir(), '.sidekick');
@@ -74,10 +62,6 @@ function parseString(value: string | undefined, fallback: string): string {
   return trimmed || fallback;
 }
 
-function parseTransport(value: string | undefined): SidekickTransport {
-  return value === 'http' ? 'http' : 'stdio';
-}
-
 function parseLogLevel(value: string | undefined, fallback: SidekickLogLevel): SidekickLogLevel {
   return value === 'error' || value === 'info' || value === 'debug' ? value : fallback;
 }
@@ -89,11 +73,6 @@ function parseStderrLogLevel(
   return value === 'error' || value === 'info' || value === 'debug' || value === 'silent'
     ? value
     : fallback;
-}
-
-function normalizeHttpPath(value: string | undefined, fallback: string): string {
-  const parsed = parseString(value, fallback);
-  return parsed.startsWith('/') ? parsed : `/${parsed}`;
 }
 
 function isRunnerName(value: unknown): value is RunnerName {
@@ -225,24 +204,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SidekickConfig
     path.join(sidekickHome, 'config.json'),
   );
   const userConfigState = readUserConfig(configPath);
-  const serviceRootDir = parseString(
-    env.SIDEKICK_SERVICE_ROOT_DIR,
-    path.join(sidekickHome, 'service'),
-  );
 
   return {
-    transport: parseTransport(env.SIDEKICK_TRANSPORT),
     cliDetectTimeoutMs: parsePositiveInt(env.SIDEKICK_CLI_DETECT_TIMEOUT_MS, 5_000),
     killGraceMs: parsePositiveInt(env.SIDEKICK_KILL_GRACE_MS, 5_000),
     taskTtlMs: parsePositiveInt(env.SIDEKICK_TASK_TTL_MS, 60 * 60 * 1000),
     taskPollIntervalMs: parsePositiveInt(env.SIDEKICK_TASK_POLL_INTERVAL_MS, 1_000),
     progressIdleHeartbeatMs: parsePositiveInt(env.SIDEKICK_PROGRESS_IDLE_HEARTBEAT_MS, 10_000),
     progressThrottleMs: parsePositiveInt(env.SIDEKICK_PROGRESS_THROTTLE_MS, 1_000),
-    httpHost: parseString(env.SIDEKICK_HTTP_HOST, '127.0.0.1'),
-    httpPort: parsePositiveInt(env.SIDEKICK_HTTP_PORT, 37420),
-    httpPath: normalizeHttpPath(env.SIDEKICK_HTTP_PATH, '/mcp'),
-    httpAuthToken: env.SIDEKICK_HTTP_AUTH_TOKEN?.trim() || undefined,
-    httpSessionIdleMs: parsePositiveInt(env.SIDEKICK_HTTP_SESSION_IDLE_MS, 30 * 60 * 1000),
     logPath: parseString(env.SIDEKICK_LOG_PATH, path.join(sidekickHome, 'logs', 'sidekick.log')),
     logLevel: parseLogLevel(env.SIDEKICK_LOG_LEVEL, 'debug'),
     stderrLogLevel: parseStderrLogLevel(env.SIDEKICK_STDERR_LOG_LEVEL, 'error'),
@@ -250,19 +219,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SidekickConfig
     configPath,
     taskRootDir: path.join(sidekickHome, 'tasks'),
     worktreeRootDir: path.join(sidekickHome, 'worktrees'),
-    serviceRootDir,
-    serviceLogPath: parseString(
-      env.SIDEKICK_SERVICE_LOG_PATH,
-      path.join(serviceRootDir, 'logs', 'service.log'),
-    ),
-    serviceEnvPath: parseString(
-      env.SIDEKICK_SERVICE_ENV_PATH,
-      path.join(serviceRootDir, 'env'),
-    ),
-    serviceManifestPath: parseString(
-      env.SIDEKICK_SERVICE_MANIFEST_PATH,
-      path.join(serviceRootDir, 'manifest.json'),
-    ),
     ...userConfigState,
   };
 }

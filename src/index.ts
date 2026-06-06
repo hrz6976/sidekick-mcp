@@ -2,35 +2,25 @@
 import 'dotenv/config';
 
 import { loadConfig } from './config.js';
-import { startHttpServer } from './httpServer.js';
 import { createLogger } from './logger.js';
 import { startServer as startStdioServer } from './serverApp.js';
-import { handleServiceCommand } from './service/manager.js';
 
 interface ClosableRuntime {
   close(reason?: string): Promise<void>;
 }
 
 function parseCommand(argv: string[]): {
-  command: 'serve-stdio' | 'serve-http' | 'service';
+  command: 'serve-stdio';
   args: string[];
 } {
   const [firstArg, ...rest] = argv;
-
-  if (firstArg === 'serve-http') {
-    return { command: 'serve-http', args: rest };
-  }
 
   if (firstArg === 'serve-stdio') {
     return { command: 'serve-stdio', args: rest };
   }
 
-  if (firstArg === 'service') {
-    return { command: 'service', args: rest };
-  }
-
   return {
-    command: loadConfig().transport === 'http' ? 'serve-http' : 'serve-stdio',
+    command: 'serve-stdio',
     args: argv,
   };
 }
@@ -55,14 +45,7 @@ async function main() {
     platform: process.platform,
   });
 
-  if (parsed.command === 'service') {
-    await handleServiceCommand(parsed.args, config, rootLogger);
-    return;
-  }
-
-  const runtime: ClosableRuntime = parsed.command === 'serve-http'
-    ? await startHttpServer({ ...config, transport: 'http' }, rootLogger)
-    : await startStdioServer({ ...config, transport: 'stdio' }, rootLogger);
+  const runtime: ClosableRuntime = await startStdioServer(config, rootLogger);
 
   const shutdown = async (signalName: string) => {
     logger.info('process_signal_received', { signalName });
@@ -75,7 +58,7 @@ async function main() {
     void runtime.close(event);
     setTimeout(() => {
       process.exit(1);
-    }, parsed.command === 'serve-http' ? 250 : 25).unref();
+    }, 25).unref();
   };
 
   process.once('SIGINT', () => {

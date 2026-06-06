@@ -12,7 +12,6 @@ describe('config', () => {
     try {
       const config = loadConfig({ SIDEKICK_HOME: home });
 
-      expect(config.transport).toBe('stdio');
       expect(config.sidekickHome).toBe(home);
       expect(config.configPath).toBe(path.join(home, 'config.json'));
       expect(config.taskRootDir).toBe(path.join(home, 'tasks'));
@@ -85,26 +84,14 @@ describe('config', () => {
     }
   });
 
-  it('parses Sidekick HTTP and service environment overrides', () => {
+  it('parses Sidekick logging environment overrides', () => {
     const config = loadConfig({
-      SIDEKICK_TRANSPORT: 'http',
-      SIDEKICK_HTTP_PORT: '40123',
-      SIDEKICK_HTTP_PATH: 'custom-mcp',
-      SIDEKICK_HTTP_AUTH_TOKEN: 'secret-token',
       SIDEKICK_LOG_LEVEL: 'info',
       SIDEKICK_STDERR_LOG_LEVEL: 'silent',
-      SIDEKICK_SERVICE_ROOT_DIR: '/tmp/sidekick-service',
-      SIDEKICK_SERVICE_MANIFEST_PATH: '/tmp/sidekick-service/custom-manifest.json',
     });
 
-    expect(config.transport).toBe('http');
-    expect(config.httpPort).toBe(40123);
-    expect(config.httpPath).toBe('/custom-mcp');
-    expect(config.httpAuthToken).toBe('secret-token');
     expect(config.logLevel).toBe('info');
     expect(config.stderrLogLevel).toBe('silent');
-    expect(config.serviceRootDir).toBe('/tmp/sidekick-service');
-    expect(config.serviceManifestPath).toBe('/tmp/sidekick-service/custom-manifest.json');
   });
 
   it('does not read legacy MULTICLI environment variables', () => {
@@ -114,8 +101,6 @@ describe('config', () => {
       MULTICLI_HTTP_AUTH_TOKEN: 'legacy-token',
     });
 
-    expect(config.transport).toBe('stdio');
     expect(config.logPath).not.toBe('/tmp/legacy.log');
-    expect(config.httpAuthToken).toBeUndefined();
   });
 });

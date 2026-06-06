@@ -271,7 +271,7 @@ describe('commandExecutor', () => {
       cwd: '/tmp/project-root',
       env: {
         PATH: '/custom/bin',
-        SIDEKICK_SERVICE: '1',
+        SIDEKICK_TEST_FLAG: '1',
       },
     });
     mock.emitStdout('help output');
@@ -286,7 +286,7 @@ describe('commandExecutor', () => {
         cwd: '/tmp/project-root',
         env: {
           PATH: '/custom/bin',
-          SIDEKICK_SERVICE: '1',
+          SIDEKICK_TEST_FLAG: '1',
         },
       }),
     );

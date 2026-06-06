@@ -1,6 +1,7 @@
 import { spawn } from "child_process";
-import { CLI } from "../constants.js";
+import type { RunnerName } from "../config.js";
 import type { Logger } from "../logger.js";
+import type { AgentRunner } from "../runners/types.js";
 
 const isWindows = process.platform === "win32";
 
@@ -76,18 +77,22 @@ export async function commandExists(
   });
 }
 
-export interface CliAvailability {
-  gemini: boolean;
-  codex: boolean;
-  claude: boolean;
-  opencode: boolean;
+type CliProbe = Pick<AgentRunner, 'name' | 'defaultCommand'>;
+
+export type CliAvailability = Record<RunnerName, boolean>;
+
+function unavailable(runners: readonly CliProbe[]): CliAvailability {
+  return Object.fromEntries(
+    runners.map((runner) => [runner.name, false]),
+  ) as CliAvailability;
 }
 
 /**
- * Detect which of the four supported CLIs are available on the system.
- * Runs all four checks in parallel for speed.
+ * Detect which supported runner CLIs are available on the system.
+ * Runs checks in parallel for speed.
  */
 export async function detectAvailableClis(
+  runners: readonly CliProbe[],
   timeoutMs?: number,
   logger?: Logger,
 ): Promise<CliAvailability> {
@@ -95,18 +100,19 @@ export async function detectAvailableClis(
     logger?.info('cli_detection_skipped', {
       reason: 'QA_NO_CLIS=true',
     });
-    return { gemini: false, codex: false, claude: false, opencode: false };
+    return unavailable(runners);
   }
 
-  logger?.info('cli_detection_started', { timeoutMs });
-  const [gemini, codex, claude, opencode] = await Promise.all([
-    commandExists(CLI.COMMANDS.GEMINI, timeoutMs, logger),
-    commandExists(CLI.COMMANDS.CODEX, timeoutMs, logger),
-    commandExists(CLI.COMMANDS.CLAUDE, timeoutMs, logger),
-    commandExists(CLI.COMMANDS.OPENCODE, timeoutMs, logger),
-  ]);
+  logger?.info('cli_detection_started', {
+    runners: runners.map((runner) => runner.name),
+    timeoutMs,
+  });
+  const entries = await Promise.all(runners.map(async (runner) => [
+    runner.name,
+    await commandExists(runner.defaultCommand, timeoutMs, logger),
+  ] as const));
 
-  const availability: CliAvailability = { gemini, codex, claude, opencode };
+  const availability = Object.fromEntries(entries) as CliAvailability;
   logger?.info('cli_detection_finished', { availability });
 
   return availability;

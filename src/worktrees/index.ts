@@ -1,20 +1,18 @@
-import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { RunnerName, WorktreeMode } from '../config.js';
-import type { ToolExecutionContext } from '../execution.js';
-import type { WorktreeHandle } from '../runners/types.js';
-import { TaskMetadataStore } from '../tasks/metadataStore.js';
 import { executeCommand } from '../utils/commandExecutor.js';
+import type { CleanupRequest, WorktreeHandle, WorktreeRequest } from './types.js';
 
-export interface WorktreeRequest {
-  agent: RunnerName;
-  taskId: string;
-  baseCwd: string;
-  mode: WorktreeMode;
-  worktreeRootDir: string;
-  context?: ToolExecutionContext;
+async function git(
+  args: string[],
+  cwd: string,
+  context: WorktreeRequest['context'] | CleanupRequest['context'],
+): Promise<string> {
+  return executeCommand('git', args, {
+    ...context,
+    cwd,
+  });
 }
 
 function shortTaskId(taskId: string): string {
@@ -22,19 +20,15 @@ function shortTaskId(taskId: string): string {
 }
 
 function repoHash(repoRoot: string): string {
-  return createHash('sha256').update(repoRoot).digest('hex').slice(0, 16);
+  let hash = 0;
+  for (let index = 0; index < repoRoot.length; index += 1) {
+    hash = ((hash << 5) - hash + repoRoot.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(36);
 }
 
-function nativeWorktreeName(taskId: string, agent: RunnerName): string {
+function nativeWorktreeName(taskId: string, agent: string): string {
   return `sidekick-${shortTaskId(taskId)}-${agent}`;
-}
-
-async function git(args: string[], cwd: string, context?: ToolExecutionContext): Promise<string> {
-  return executeCommand('git', args, {
-    ...context,
-    cwd,
-    timeoutMs: 30_000,
-  });
 }
 
 export async function createWorktree(request: WorktreeRequest): Promise<WorktreeHandle> {
@@ -47,7 +41,7 @@ export async function createWorktree(request: WorktreeRequest): Promise<Worktree
   }
 
   const name = nativeWorktreeName(request.taskId, request.agent);
-  if (request.agent === 'claude' || request.agent === 'gemini') {
+  if (request.worktreeSupport === 'native') {
     return {
       id: name,
       kind: 'native',
@@ -83,14 +77,6 @@ export async function createWorktree(request: WorktreeRequest): Promise<Worktree
     name,
     path: worktreePath,
   };
-}
-
-export interface CleanupRequest {
-  taskId?: string;
-  worktreeId?: string;
-  force?: boolean;
-  metadataStore: TaskMetadataStore;
-  context?: ToolExecutionContext;
 }
 
 export async function cleanupWorktree(request: CleanupRequest): Promise<string> {
@@ -150,3 +136,5 @@ export async function cleanupWorktree(request: CleanupRequest): Promise<string> 
 
   return `Removed Sidekick worktree ${worktree.path} for task ${metadata.taskId}.`;
 }
+
+export type { CleanupRequest, WorktreeHandle, WorktreeRequest } from './types.js';

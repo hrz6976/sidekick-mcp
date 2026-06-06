@@ -1,6 +1,7 @@
 // Tool Registry Index - registers the Sidekick public tool surface.
 import type { SidekickConfig } from '../config.js';
 import type { Logger } from '../logger.js';
+import { getRunnerAdapters } from '../runners/registry.js';
 import { detectAvailableClis, type CliAvailability } from '../utils/cliDetector.js';
 import { toolRegistry } from './registry.js';
 import { createSidekickTools } from './sidekick.js';
@@ -13,6 +14,7 @@ export async function initTools(
 ): Promise<CliAvailability> {
   toolRegistry.length = 0;
   const availability = await detectAvailableClis(
+    getRunnerAdapters(),
     config.cliDetectTimeoutMs,
     config.logger,
   );

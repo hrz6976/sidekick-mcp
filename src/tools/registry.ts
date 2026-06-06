@@ -1,8 +1,9 @@
 import { Tool, Prompt } from "@modelcontextprotocol/sdk/types.js"; // Each tool definition includes its metadata, schema, prompt, and execution logic in one place.
 
-import { ToolArguments } from "../constants.js";
 import { z, ZodError } from "zod";
 import { ToolExecutionContext, ToolTimeoutClass } from "../execution.js";
+
+export type ToolArguments = Record<string, unknown>;
 
 export interface UnifiedTool {
   name: string;

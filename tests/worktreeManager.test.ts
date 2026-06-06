@@ -5,7 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { TaskMetadataStore } from '../src/tasks/metadataStore.js';
-import { cleanupWorktree, createWorktree } from '../src/worktrees/manager.js';
+import { cleanupWorktree, createWorktree } from '../src/worktrees/index.js';
 
 describe('worktree manager', () => {
   it('returns native worktree handles for Claude and Gemini', async () => {
@@ -14,6 +14,7 @@ describe('worktree manager', () => {
       taskId: 'abc-123',
       baseCwd: '/repo',
       mode: 'auto',
+      worktreeSupport: 'native',
       worktreeRootDir: '/tmp/worktrees',
     })).resolves.toEqual({
       id: 'sidekick-abc123-claude',

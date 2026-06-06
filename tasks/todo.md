@@ -510,3 +510,219 @@
   - `npm run build`
   - `npm run test:e2e`
   - `git diff --check`
+
+## Claude Review Resolution
+
+- [x] Read Claude review handoff and relevant lessons.
+- [x] Fix `effort` override validation so unsupported runner/value combinations fail before CLI launch.
+- [x] Fix OpenCode recommendation selection so provider-prefixed DeepSeek/Kimi models are usable and duplicate aliases are avoided.
+- [x] Route `list_agents` model listing through the safe fallback helper.
+- [x] Apply cleanup findings for synchronous `configuredAgents` and duplicated `firstModel` calls.
+- [x] Add focused regression tests for the review findings.
+- [x] Run focused tests, `npm run lint`, `npm test`, `npm run build`, and `git diff --check`.
+- [x] Write review/results and final handoff note.
+
+### Claude Review Resolution Review / Results
+
+- Fixed C7 by validating public ask-tool `effort` overrides before runner launch:
+  - Claude accepts `low`, `medium`, `high`.
+  - Codex accepts `minimal`, `low`, `medium`, `high`.
+  - OpenCode accepts simple variant names for `--variant`.
+  - Gemini rejects `effort` because Sidekick intentionally has no Gemini effort mapping.
+- Fixed C3 by allowing OpenCode DeepSeek/Kimi pattern matches to use `opencode/...` models when those are the locally discovered named provider models.
+- Fixed C4 by excluding an already-selected DeepSeek model from Kimi recommendation matching.
+- Fixed C10 by routing `list_agents` model discovery through `safeListModels`.
+- Applied C8/C9 cleanups in `setupPrompt` / `buildRecommendedConfig`.
+- Updated README and setup guidance for validated `effort` semantics.
+- Verification passed:
+  - `npm test -- tests/serverApp.test.ts`
+  - `npm test -- tests/serverApp.test.ts tests/runners.test.ts`
+  - `npm run lint`
+  - `npm test` (14 files / 122 tests)
+  - `npm run build`
+  - `npm run test:e2e` (`SIDEKICK_E2E_OK`)
+  - `git diff --check`
+
+## npm Patch Release
+
+- [x] Confirm current npm package/version state.
+- [x] Confirm release workflow behavior for already-published patch versions.
+- [x] Review pending release diff and inherited handoff notes.
+- [x] Run local release verification:
+  - [x] `npm run lint`
+  - [x] `npm test`
+  - [x] `npm run build`
+- [x] Run `npm run test:e2e`.
+- [x] Run `git diff --check`.
+- [ ] Commit release contents with the required Claude, Codex, and Gemini authorship reference.
+- [ ] Push to GitHub `main` to trigger the release workflow.
+- [ ] Record publish handoff/results.
+
+### npm Patch Release Notes
+
+- `npm view @hrz6976/sidekick-mcp version versions --json` reports `0.1.0` is already published.
+- Per `.github/workflows/release.yml` and AGENTS release guidance, do not manually edit `package.json` for this patch release. A push to `main` with the current `0.1.0` should trigger the workflow's bump path, opening/auto-merging `chore/version-bump`; merging that bump publishes `0.1.1` via npm trusted publishing.
+- Release continuation verification on 2026-06-06 passed:
+  - `npm view @hrz6976/sidekick-mcp version versions --json` returned only `0.1.0`.
+  - `npm run lint`
+  - `npm test` (13 files / 112 tests)
+  - `npm run build`
+  - `npm run test:e2e` (`SIDEKICK_E2E_OK`)
+  - `git diff --check`
+  - `git fetch origin main` and `git rev-list --left-right --count HEAD...origin/main` returned `0 0`.
+
+## Project Simplification
+
+- [x] Pause npm release work after user changed direction.
+- [x] Check current worktree status and preserve existing uncommitted review-resolution changes.
+- [x] Create a dedicated handoff thread at `conversations/2026-06-06-project-simplification/`.
+- [x] Inspect daemon/service/HTTP and runner-adapter coupling points.
+- [x] Remove daemon/service/HTTP transport:
+  - [x] Delete `src/httpServer.ts` and `src/service/**`.
+  - [x] Remove `service` / `serve-http` CLI commands and `SIDEKICK_TRANSPORT=http` behavior.
+  - [x] Remove HTTP/service config fields and env parsing.
+  - [x] Delete HTTP/service tests and service docs.
+- [x] Refactor runner adapters:
+  - [x] Move per-runner command args, model listing, output extraction, progress rendering, and effort validation behind adapter definitions.
+  - [x] Replace central runner-name switches in `registry.ts`, `output.ts`, `progress.ts`, and `sidekick.ts` with adapter lookup where practical.
+  - [x] Keep config format stable for existing `runner` names.
+- [x] Update README, CHANGELOG, AGENTS architecture notes, and tests.
+- [x] Run verification:
+  - [x] `npm run lint`
+  - [x] `npm test`
+  - [x] `npm run build`
+  - [x] `npm run test:e2e`
+  - [x] `git diff --check`
+
+### Project Simplification Plan
+
+- Daemon removal should be a clean deletion, not a compatibility shim: Sidekick should run as a stdio MCP server only. User confirmed deleting both service and HTTP transport; do not keep foreground `serve-http`.
+- Runner refactor should favor composition over class inheritance: define one adapter object per coding agent with the small behaviors Sidekick needs, then have registry/tool code consume those adapter capabilities.
+- Keep the already-uncommitted Claude review fixes intact and build on top of them rather than reverting them.
+
+### Project Simplification Review / Results
+
+- Removed `src/httpServer.ts`, `src/service/**`, `tests/httpServer.test.ts`, and `tests/service.test.ts`.
+- Removed HTTP/service config fields and env parsing; `sidekick-mcp` now starts the stdio server path only.
+- Removed stale HTTP/service package overrides; `package-lock.json` no longer contains those entries from root overrides, though `@modelcontextprotocol/sdk` still carries its own HTTP-related transitive dependencies.
+- Added runner adapter capabilities for model discovery text, fallback models, effort validation, output extraction, and progress rendering.
+- Refined runner abstraction into a class hierarchy: shared `BaseRunner` plus separate Claude, Gemini, Codex, and OpenCode runner files.
+- Moved runner-specific output extraction and progress rendering into those concrete runner classes; shared `output.ts` and `progress.ts` now contain generic parsing/rendering helpers only.
+- Updated `sidekick.ts` to use adapter lookup for setup discovery, effort validation, progress rendering, runner execution, and answer extraction.
+- Added adapter capability regression coverage in `tests/runners.test.ts`.
+- Verification passed:
+  - `npm run lint`
+  - `npm test` (12 files / 107 tests)
+  - `npm run build`
+  - `npm run test:e2e` (`SIDEKICK_E2E_OK`)
+  - `git diff --check`
+
+## Task / Worktree Modularization
+
+- [x] Move the MCP protocol task store into `src/tasks/protocolTaskStore.ts`.
+- [x] Move shared worktree request/handle types into `src/worktrees/types.ts`.
+- [x] Split worktree implementation into focused create, cleanup, git, and naming modules.
+- [x] Keep `src/worktrees/manager.ts` as a compatibility facade for callers and tests.
+- [x] Extract ask-tool execution lifecycle into `TaskRunCoordinator`.
+- [x] Keep `src/tools/sidekick.ts` focused on tool schemas, setup, list_agents, and cleanup wiring.
+- [x] Add source-boundary regression coverage for the new task/worktree ownership.
+- [x] Run verification:
+  - [x] `npm run lint`
+  - [x] `npm test`
+  - [x] `npm run build`
+  - [x] `npm run test:e2e`
+  - [x] `git diff --check`
+
+### Task / Worktree Modularization Plan
+
+- Treat task execution as task-domain behavior: metadata creation, stdout/stderr/result writes, progress flushing, answer extraction, and failure state updates belong in a coordinator under `src/tasks/`.
+- Treat worktrees as a small subsystem: creation, cleanup, git invocation, naming, and public types should be separated, while `manager.ts` remains the stable import surface.
+- Do not alter config, generated MCP tools, worktree semantics, runner CLI args, task result shape, or cleanup behavior.
+
+### Task / Worktree Modularization Review / Results
+
+- Added `src/tasks/protocolTaskStore.ts` for MCP protocol task/cancel handling and removed the root-level `src/taskStore.ts`.
+- Added `src/tasks/runCoordinator.ts` for ask-task run orchestration, including worktree creation, metadata/log/result writes, progress rendering, answer extraction, and failure state updates.
+- Split worktree internals into `src/worktrees/create.ts`, `src/worktrees/cleanup.ts`, `src/worktrees/git.ts`, `src/worktrees/naming.ts`, and `src/worktrees/types.ts`; `src/worktrees/manager.ts` now re-exports the public facade.
+- Updated `src/tools/sidekick.ts` so ask tools delegate run lifecycle to `TaskRunCoordinator`; setup, list_agents, and cleanup behavior remain in the tool layer.
+- Added `tests/sourceBoundaries.test.ts` to guard the worktree facade and task coordinator ownership.
+- Verification passed:
+  - `npm run lint`
+  - `npm test` (13 files / 110 tests)
+  - `npm run build`
+  - `npm run test:e2e` (`SIDEKICK_E2E_OK`)
+  - `git diff --check`
+
+## Architecture Review Resolution
+
+- [x] Read `conversations/2026-06-06-project-simplification/061601-claude-reviewed-arch-issues.md`.
+- [x] Make CLI detection runner-driven via runner adapters instead of hard-coded CLI constants.
+- [x] Remove stale `CLI.COMMANDS` constants.
+- [x] Make native-vs-managed worktree handling runner-driven.
+- [x] Merge tiny worktree helper modules into a single worktree domain entrypoint while keeping shared types separate.
+- [x] Move setup recommendation templates into concrete runner classes.
+- [x] Add/update regression tests for runner capabilities, CLI detection, worktree boundaries, and setup recommendations.
+- [x] Run verification:
+  - [x] `npm run lint`
+  - [x] focused Vitest subset
+  - [x] `npm test`
+  - [x] `npm run build`
+  - [x] `npm run test:e2e`
+  - [x] `git diff --check`
+
+### Architecture Review Resolution Plan
+
+- Keep `AgentRunner` as the single source for runner-specific behavior that affects setup, CLI probing, and worktree strategy.
+- Keep `src/worktrees/types.ts` as the shared type boundary, but collapse tiny worktree implementation helpers into `src/worktrees/index.ts` to reduce navigation overhead.
+- Preserve generated tool names, config shape, command arguments, worktree semantics, result JSON shape, and setup starter config behavior.
+
+### Architecture Review Resolution Review / Results
+
+- `src/utils/cliDetector.ts` now accepts runner probes and builds `CliAvailability` by iterating adapters; `src/tools/index.ts` passes `getRunnerAdapters()`.
+- `src/constants.ts` no longer carries stale `CLI.COMMANDS`.
+- `AgentRunner` now owns `defaultCommand`, `worktreeSupport`, `recommendedAgents()`, and fallback recommendation models.
+- Claude/Gemini declare native worktree support; Codex/OpenCode use the base managed worktree default.
+- `TaskRunCoordinator` passes runner worktree support into `createWorktree`; worktree creation no longer checks runner names.
+- Worktree implementation is merged into `src/worktrees/index.ts`; `src/worktrees/types.ts` remains the shared type boundary.
+- Setup starter recommendations are produced by runner instances, preserving Gemini + DeepSeek fallback behavior when no CLIs are detected.
+- Verification passed:
+  - `npm run lint`
+  - focused Vitest subset: `tests/utils/cliDetector.test.ts`, `tests/worktreeManager.test.ts`, `tests/runners.test.ts`, `tests/sourceBoundaries.test.ts`, `tests/serverApp.test.ts`, `tests/tools/initTools.test.ts`
+  - `npm test` (13 files / 111 tests)
+  - `npm run build`
+  - `npm run test:e2e` (`SIDEKICK_E2E_OK`)
+  - `git diff --check`
+
+## Small File Architecture Scan
+
+- [x] Scan all non-generated files under 20 lines.
+- [x] Classify tiny docs/config/type files that should remain separate.
+- [x] Remove remaining tiny shared constants indirection.
+- [x] Add regression coverage for the deleted grab-bag constants file.
+- [x] Run verification:
+  - [x] `npm run lint`
+  - [x] `npm test`
+  - [x] `npm run build`
+  - [x] `npm run test:e2e`
+  - [x] `git diff --check`
+
+### Small File Architecture Scan Review / Results
+
+- Sub-20-line files after excluding generated/dependency folders were:
+  - `src/constants.ts`
+  - `src/execution.ts`
+  - `tasks/lessons.md`
+  - `CHANGELOG.md`
+  - `vitest.config.ts`
+  - `tsconfig.json`
+- `src/constants.ts` was the only architecture smell: it only exported one protocol string and `ToolArguments`, so it was removed.
+- `ToolArguments` now lives in `src/tools/registry.ts`, where the tool execution contract is defined.
+- The progress notification method is now a local constant in `src/serverApp.ts`, its only runtime use site.
+- `src/execution.ts` remains separate because `ToolExecutionContext` is a real shared runtime contract across tools, runners, command execution, and server code.
+- Tiny config/docs files were left alone because merging them would reduce maintainability.
+- Verification passed:
+  - `npm run lint`
+  - `npm test` (13 files / 112 tests)
+  - `npm run build`
+  - `npm run test:e2e` (`SIDEKICK_E2E_OK`)
+  - `git diff --check`

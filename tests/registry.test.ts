@@ -9,8 +9,7 @@ import {
   executeTool,
   validateToolArguments,
 } from '../src/tools/registry.js';
-import type { UnifiedTool } from '../src/tools/registry.js';
-import type { ToolArguments } from '../src/constants.js';
+import type { ToolArguments, UnifiedTool } from '../src/tools/registry.js';
 
 function makeTool(overrides: Partial<UnifiedTool> = {}): UnifiedTool {
   return {

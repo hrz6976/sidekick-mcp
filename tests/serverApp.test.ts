@@ -21,24 +21,21 @@ vi.mock('../src/utils/commandExecutor.js', async (importOriginal) => {
 import { detectAvailableClis } from '../src/utils/cliDetector.js';
 import { executeCommand, CommandExecutionError } from '../src/utils/commandExecutor.js';
 import { createServerApp } from '../src/serverApp.js';
+import * as runnerRegistry from '../src/runners/registry.js';
 import type { SidekickServerApp } from '../src/serverApp.js';
 import type { SidekickConfig } from '../src/config.js';
 import type { CreateServerAppOptions } from '../src/serverApp.js';
+import type { CliAvailability } from '../src/utils/cliDetector.js';
 
 function createConfig(setupRequired = false): SidekickConfig {
   const home = mkdtempSync(path.join(os.tmpdir(), 'sidekick-server-app-'));
   return {
-    transport: 'stdio',
     cliDetectTimeoutMs: 100,
     killGraceMs: 50,
     taskTtlMs: 60_000,
     taskPollIntervalMs: 5,
     progressIdleHeartbeatMs: 25,
     progressThrottleMs: 1,
-    httpHost: '127.0.0.1',
-    httpPort: 37420,
-    httpPath: '/mcp',
-    httpSessionIdleMs: 60_000,
     logPath: path.join(home, 'logs', 'sidekick.log'),
     logLevel: 'debug',
     stderrLogLevel: 'silent',
@@ -46,10 +43,6 @@ function createConfig(setupRequired = false): SidekickConfig {
     configPath: path.join(home, 'config.json'),
     taskRootDir: path.join(home, 'tasks'),
     worktreeRootDir: path.join(home, 'worktrees'),
-    serviceRootDir: path.join(home, 'service'),
-    serviceLogPath: path.join(home, 'service', 'logs', 'service.log'),
-    serviceEnvPath: path.join(home, 'service', 'env'),
-    serviceManifestPath: path.join(home, 'service', 'manifest.json'),
     setupRequired,
     userConfig: setupRequired
       ? undefined
@@ -79,13 +72,14 @@ function createConfig(setupRequired = false): SidekickConfig {
 async function createConnectedPair(
   config = createConfig(),
   options?: CreateServerAppOptions,
-) {
-  vi.mocked(detectAvailableClis).mockResolvedValue({
+  availability: CliAvailability = {
     gemini: false,
     codex: true,
     claude: true,
     opencode: false,
-  });
+  },
+) {
+  vi.mocked(detectAvailableClis).mockResolvedValue(availability);
 
   const app = await createServerApp(config, undefined, options);
   const client = new Client(
@@ -185,6 +179,57 @@ describe('serverApp', () => {
     expect(result.content[0].text).toContain('patch it instead of overwriting');
   });
 
+  it('recommends provider-prefixed OpenCode DeepSeek models', async () => {
+    vi.mocked(executeCommand).mockResolvedValue('opencode/deepseek-chat\n');
+    ({ app, client, config } = await createConnectedPair(
+      createConfig(true),
+      undefined,
+      {
+        gemini: false,
+        codex: false,
+        claude: false,
+        opencode: true,
+      },
+    ));
+
+    const result = await client.callTool(
+      {
+        name: 'setup',
+        arguments: {},
+      },
+      CallToolResultSchema,
+    );
+
+    expect(result.isError).toBe(false);
+    expect(result.content[0].text).toContain('"deepseek": {\n      "runner": "opencode",\n      "model": "opencode/deepseek-chat"');
+  });
+
+  it('does not duplicate one OpenCode model across DeepSeek and Kimi recommendations', async () => {
+    vi.mocked(executeCommand).mockResolvedValue('deepseek/moonshot-v1\n');
+    ({ app, client, config } = await createConnectedPair(
+      createConfig(true),
+      undefined,
+      {
+        gemini: false,
+        codex: false,
+        claude: false,
+        opencode: true,
+      },
+    ));
+
+    const result = await client.callTool(
+      {
+        name: 'setup',
+        arguments: {},
+      },
+      CallToolResultSchema,
+    );
+
+    expect(result.isError).toBe(false);
+    expect(result.content[0].text).toContain('"deepseek": {\n      "runner": "opencode",\n      "model": "deepseek/moonshot-v1"');
+    expect(result.content[0].text).not.toContain('"kimi": {');
+  });
+
   it('supports direct ask tool calls without task augmentation', async () => {
     ({ app, client, config } = await createConnectedPair());
     vi.mocked(executeCommand).mockResolvedValue('direct response');
@@ -214,20 +259,54 @@ describe('serverApp', () => {
     const result = await client.callTool(
       {
         name: 'ask_claude',
-        arguments: { prompt: 'hello', effort: 'xhigh', worktree: 'off' },
+        arguments: { prompt: 'hello', effort: 'high', worktree: 'off' },
       },
       CallToolResultSchema,
     );
 
     expect(result.isError).toBe(false);
     const parsed = JSON.parse(result.content[0].text);
-    expect(parsed.effort).toBe('xhigh');
+    expect(parsed.effort).toBe('high');
     expect(parsed.answer).toBe('effort response');
     expect(executeCommand).toHaveBeenCalledWith(
       'claude',
-      expect.arrayContaining(['--effort', 'xhigh']),
+      expect.arrayContaining(['--effort', 'high']),
       expect.any(Object),
     );
+  });
+
+  it('rejects unsupported effort overrides before launching an agent', async () => {
+    const effortConfig = createConfig();
+    effortConfig.userConfig!.agents.gemini = {
+      runner: 'gemini',
+      enabled: true,
+      command: 'gemini',
+      model: 'auto',
+      extraArgs: [],
+    };
+    ({ app, client, config } = await createConnectedPair(effortConfig));
+    vi.mocked(executeCommand).mockResolvedValue('should not run');
+
+    const invalidClaude = await client.callTool(
+      {
+        name: 'ask_claude',
+        arguments: { prompt: 'hello', effort: 'xhigh', worktree: 'off' },
+      },
+      CallToolResultSchema,
+    );
+    const unsupportedGemini = await client.callTool(
+      {
+        name: 'ask_gemini',
+        arguments: { prompt: 'hello', effort: 'high', worktree: 'off' },
+      },
+      CallToolResultSchema,
+    );
+
+    expect(invalidClaude.isError).toBe(true);
+    expect(invalidClaude.content[0].text).toContain('Runner "claude" effort must be one of');
+    expect(unsupportedGemini.isError).toBe(true);
+    expect(unsupportedGemini.content[0].text).toContain('Runner "gemini" does not support effort overrides');
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 
   it('keeps progress values monotonic for long direct ask calls', async () => {
@@ -314,6 +393,32 @@ describe('serverApp', () => {
     expect(parsed.agents.find((agent: { agent: string; models: string[] }) => agent.agent === 'claude').models).toContain('sonnet');
     expect(result.content[0].text).not.toContain('modelHints');
     expect(parsed.guidance.join('\n')).toContain('`opencode models` without `--refresh`');
+  });
+
+  it('falls back to configured models when list_agents model listing throws', async () => {
+    const fallbackConfig = createConfig();
+    fallbackConfig.userConfig!.agents.claude.models = ['sonnet'];
+    const getRunnerSpy = vi.spyOn(runnerRegistry, 'getRunner').mockReturnValue({
+      name: 'claude',
+      listModels: vi.fn().mockRejectedValue(new Error('model list failed')),
+      buildArgs: vi.fn(),
+      run: vi.fn(),
+    });
+    ({ app, client, config } = await createConnectedPair(fallbackConfig));
+
+    const result = await client.callTool(
+      {
+        name: 'list_agents',
+        arguments: {},
+      },
+      CallToolResultSchema,
+    );
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(result.isError).toBe(false);
+    expect(parsed.agents.find((agent: { agent: string; models: string[] }) => agent.agent === 'claude').models)
+      .toEqual(['sonnet']);
+    getRunnerSpy.mockRestore();
   });
 
   it('supports task-based Sidekick execution and returns metadata/log paths', async () => {
@@ -481,10 +586,10 @@ describe('serverApp', () => {
   it('resolves session working directory before task execution', async () => {
     ({ app, client, config } = await createConnectedPair(createConfig(), {
       sessionContext: {
-        transport: 'http',
+        transport: 'stdio',
         resolveWorkingDirectory: vi.fn().mockResolvedValue({
-          cwd: '/tmp/http-project',
-          projectRoots: [{ uri: 'file:///tmp/http-project' }],
+          cwd: '/tmp/client-project',
+          projectRoots: [{ uri: 'file:///tmp/client-project' }],
         }),
       },
     }));
@@ -508,7 +613,7 @@ describe('serverApp', () => {
       'claude',
       expect.any(Array),
       expect.objectContaining({
-        cwd: '/tmp/http-project',
+        cwd: '/tmp/client-project',
       }),
     );
   });

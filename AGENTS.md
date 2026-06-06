@@ -4,7 +4,7 @@ This file provides guidance to Claude Code, Google Gemini, OpenAI Codex, and oth
 
 ## Project Overview
 
-Sidekick — an MCP (Model Context Protocol) server that lets AI clients start Claude, Gemini, Codex, and OpenCode as task-based side agents. Built with TypeScript and the `@modelcontextprotocol/sdk`. Runs over stdio by default and can run over a loopback HTTP service. Published to npm as `@hrz6976/sidekick-mcp`.
+Sidekick — an MCP (Model Context Protocol) server that lets AI clients start Claude, Gemini, Codex, and OpenCode as task-based side agents. Built with TypeScript and the `@modelcontextprotocol/sdk`. Runs over stdio. Published to npm as `@hrz6976/sidekick-mcp`.
 
 ## Workflow Orchestration
 
@@ -95,9 +95,9 @@ Sidekick — an MCP (Model Context Protocol) server that lets AI clients start C
 
 - **Runtime**: Node.js >=20.0.0, ESM (`"type": "module"`)
 - **Language**: TypeScript 5.9.x (strict mode, target ES2022, module Node16)
-- **Core dependencies**: `@modelcontextprotocol/sdk` ^1.27.1 (MCP server + stdio transport), `zod` ^4.3.6 (tool argument schemas), `dotenv` ^17.3.1 (environment loading)
+- **Core dependencies**: `@modelcontextprotocol/sdk` ^1.29.0 (MCP server + stdio transport), `zod` ^4.3.6 (tool argument schemas), `dotenv` ^17.3.1 (environment loading)
 - **Dev dependencies**: Vitest ^4.x and TypeScript ^5.9.x
-- **Architecture**: Config-driven Sidekick tool registry — missing config exposes setup/management tools and instructs clients to call `setup`; configured mode exposes always-on `setup`, `ask_<agent>` tools, `list_agents`, and `cleanup_worktree`. Runner command construction lives in `src/runners/`, task metadata in `src/tasks/`, and worktree lifecycle in `src/worktrees/`.
+- **Architecture**: Config-driven Sidekick tool registry — missing config exposes setup/management tools and instructs clients to call `setup`; configured mode exposes always-on `setup`, `ask_<agent>` tools, `list_agents`, and `cleanup_worktree`. Runner adapter definitions live in `src/runners/` and own command construction, model listing, output extraction, progress rendering, and effort validation; task metadata lives in `src/tasks/`, and worktree lifecycle lives in `src/worktrees/`.
 
 # Authorship
 All PRs and Commits to this repository must include a reference to "Claude, Codex, and Gemini" as the authors.

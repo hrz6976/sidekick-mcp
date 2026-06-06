@@ -15,17 +15,12 @@ import { detectAvailableClis } from '../../src/utils/cliDetector.js';
 function createConfig(overrides: Partial<SidekickConfig> = {}): SidekickConfig {
   const home = path.join(os.tmpdir(), `sidekick-tools-${process.pid}`);
   return {
-    transport: 'stdio',
     cliDetectTimeoutMs: 100,
     killGraceMs: 50,
     taskTtlMs: 60_000,
     taskPollIntervalMs: 5,
     progressIdleHeartbeatMs: 25,
     progressThrottleMs: 1,
-    httpHost: '127.0.0.1',
-    httpPort: 37420,
-    httpPath: '/mcp',
-    httpSessionIdleMs: 60_000,
     logPath: path.join(home, 'logs', 'sidekick.log'),
     logLevel: 'debug',
     stderrLogLevel: 'silent',
@@ -33,10 +28,6 @@ function createConfig(overrides: Partial<SidekickConfig> = {}): SidekickConfig {
     configPath: path.join(home, 'config.json'),
     taskRootDir: path.join(home, 'tasks'),
     worktreeRootDir: path.join(home, 'worktrees'),
-    serviceRootDir: path.join(home, 'service'),
-    serviceLogPath: path.join(home, 'service', 'logs', 'service.log'),
-    serviceEnvPath: path.join(home, 'service', 'env'),
-    serviceManifestPath: path.join(home, 'service', 'manifest.json'),
     setupRequired: false,
     userConfig: {
       agents: {

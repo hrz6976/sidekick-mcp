@@ -7,6 +7,7 @@ vi.mock('child_process', () => ({
 }));
 
 import { commandExists, detectAvailableClis } from '../../src/utils/cliDetector.js';
+import { getRunnerAdapters } from '../../src/runners/registry.js';
 
 function createMockChild() {
   const handlers: Record<string, Function> = {};
@@ -74,13 +75,13 @@ describe('cliDetector', () => {
     it('returns all false when QA_NO_CLIS=true', async () => {
       process.env.QA_NO_CLIS = 'true';
 
-      const result = await detectAvailableClis();
+      const result = await detectAvailableClis(getRunnerAdapters());
       expect(result).toEqual({ gemini: false, codex: false, claude: false, opencode: false });
       // spawn should not be called at all
       expect(spawn).not.toHaveBeenCalled();
     });
 
-    it('checks all three CLIs and returns correct availability', async () => {
+    it('checks runner default commands and returns correct availability', async () => {
       // Mock spawn to return different results for each CLI
       const mocks: ReturnType<typeof createMockChild>[] = [];
       vi.mocked(spawn).mockImplementation(() => {
@@ -89,19 +90,25 @@ describe('cliDetector', () => {
         return mock.child as any;
       });
 
-      const promise = detectAvailableClis();
+      const promise = detectAvailableClis(getRunnerAdapters());
 
       // Wait for all spawns to be called
       await vi.waitFor(() => expect(mocks.length).toBe(4));
 
-      // gemini found, codex not found, claude found, opencode not found
-      mocks[0].emitClose(0); // gemini
-      mocks[1].emitClose(1); // codex
-      mocks[2].emitClose(0); // claude
+      // claude found, gemini not found, codex found, opencode not found
+      mocks[0].emitClose(0); // claude
+      mocks[1].emitClose(1); // gemini
+      mocks[2].emitClose(0); // codex
       mocks[3].emitClose(1); // opencode
 
       const result = await promise;
-      expect(result).toEqual({ gemini: true, codex: false, claude: true, opencode: false });
+      expect(result).toEqual({ claude: true, gemini: false, codex: true, opencode: false });
+      expect(vi.mocked(spawn).mock.calls.map((call) => call[1]?.[0])).toEqual([
+        'claude',
+        'gemini',
+        'codex',
+        'opencode',
+      ]);
     });
   });
 });

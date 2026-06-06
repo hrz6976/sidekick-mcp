@@ -1,17 +1,14 @@
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
 import type { AgentConfig, SidekickConfig, SidekickMode, WorktreeMode } from '../config.js';
 import type { ToolExecutionContext } from '../execution.js';
-import { extractRunOutput } from '../runners/output.js';
-import { createCliProgressRenderer } from '../runners/progress.js';
-import { getRunner } from '../runners/registry.js';
+import { getRunner, getRunnerAdapters } from '../runners/registry.js';
 import { TaskMetadataStore } from '../tasks/metadataStore.js';
+import { TaskRunCoordinator } from '../tasks/runCoordinator.js';
 import type { CliAvailability } from '../utils/cliDetector.js';
-import { cleanupWorktree, createWorktree } from '../worktrees/manager.js';
+import { cleanupWorktree } from '../worktrees/index.js';
 import type { UnifiedTool } from './registry.js';
 
-const RUNNER_NAMES = ['claude', 'gemini', 'codex', 'opencode'] as const;
 const ModeSchema = z.enum(['read-only', 'edit', 'full-access']);
 const WorktreeSchema = z.enum(['auto', 'off']);
 const AskTaskSchema = z.object({
@@ -65,10 +62,11 @@ function uniqueStrings(values: Array<string | undefined>): string[] {
 }
 
 function defaultAgentConfig(runner: AgentConfig['runner'], enabled: boolean): AgentConfig {
+  const adapter = getRunner(runner);
   return {
     runner,
     enabled,
-    command: runner,
+    command: adapter.defaultCommand,
     extraArgs: [],
   };
 }
@@ -84,29 +82,6 @@ async function safeListModels(
   }
 }
 
-function firstModel(models: string[]): string | undefined {
-  return models.find((model) => model.trim());
-}
-
-function preferOpenCodeModel(models: string[], pattern?: RegExp): string | undefined {
-  return models.find((model) =>
-    !model.startsWith('opencode/') && (!pattern || pattern.test(model)),
-  );
-}
-
-function modelDiscoveryDescription(runner: AgentConfig['runner']): string {
-  switch (runner) {
-    case 'codex':
-      return '`codex debug models --bundled` local bundled catalog parsing; falls back to Sidekick built-in Codex hints';
-    case 'opencode':
-      return '`opencode models` local provider-layer parsing; Sidekick never uses `--refresh` by default';
-    case 'gemini':
-      return 'Gemini CLI aliases only (`auto`, `pro`, `flash`, `flash-lite`); Gemini CLI has no headless model-list command';
-    case 'claude':
-      return 'Claude Code aliases only (`sonnet`, `opus`, `haiku`) plus any full model name the user chooses; Claude CLI has no headless model-list command';
-  }
-}
-
 function buildRecommendedConfig(discovery: Array<{
   runner: AgentConfig['runner'];
   installed: boolean;
@@ -114,83 +89,20 @@ function buildRecommendedConfig(discovery: Array<{
 }>): unknown {
   const agents: Record<string, unknown> = {};
 
-  const byRunner = Object.fromEntries(discovery.map((entry) => [entry.runner, entry]));
-  const gemini = byRunner.gemini;
-  if (gemini?.installed) {
-    agents.gemini = {
-      runner: 'gemini',
-      ...(firstModel(gemini.models) ? { model: firstModel(gemini.models) } : {}),
-      extraArgs: [],
-      description: 'Ask Gemini for broad reasoning and implementation review.',
-    };
-  }
-
-  const claude = byRunner.claude;
-  if (claude?.installed) {
-    agents.claude = {
-      runner: 'claude',
-      ...(firstModel(claude.models) ? { model: firstModel(claude.models) } : {}),
-      extraArgs: [],
-      description: 'Ask Claude for implementation and code review.',
-    };
-  }
-
-  const codex = byRunner.codex;
-  if (codex?.installed) {
-    agents.codex = {
-      runner: 'codex',
-      ...(firstModel(codex.models) ? { model: firstModel(codex.models) } : {}),
-      extraArgs: [],
-      description: 'Ask Codex for coding tasks and repository changes.',
-    };
-  }
-
-  const opencode = byRunner.opencode;
-  if (opencode?.installed) {
-    const deepseek = preferOpenCodeModel(opencode.models, /deepseek/i);
-    const kimi = preferOpenCodeModel(opencode.models, /kimi|moonshot/i);
-    if (deepseek) {
-      agents.deepseek = {
-        runner: 'opencode',
-        model: deepseek,
-        reasoningEffort: 'high',
-        extraArgs: [],
-        description: 'Ask DeepSeek through OpenCode with high reasoning effort.',
-      };
+  for (const entry of discovery) {
+    if (!entry.installed) {
+      continue;
     }
-    if (kimi) {
-      agents.kimi = {
-        runner: 'opencode',
-        model: kimi,
-        extraArgs: [],
-        description: 'Ask Kimi through OpenCode.',
-      };
-    }
-    if (!deepseek && !kimi) {
-      const preferred = preferOpenCodeModel(opencode.models);
-      agents.opencode = {
-        runner: 'opencode',
-        ...(preferred ? { model: preferred } : {}),
-        extraArgs: [],
-        description: 'Ask a configured OpenCode provider/model.',
-      };
-    }
+    Object.assign(agents, getRunner(entry.runner).recommendedAgents(entry.models));
   }
 
   if (Object.keys(agents).length === 0) {
-    agents.gemini = {
-      runner: 'gemini',
-      model: 'auto',
-      extraArgs: [],
-      description: 'Ask Gemini for broad reasoning and implementation review.',
-    };
-    agents.deepseek = {
-      runner: 'opencode',
-      model: 'deepseek/deepseek-chat',
-      reasoningEffort: 'high',
-      extraArgs: [],
-      description: 'Ask DeepSeek through OpenCode with high reasoning effort.',
-    };
+    for (const adapter of getRunnerAdapters()) {
+      if (adapter.fallbackRecommendationModels.length === 0) {
+        continue;
+      }
+      Object.assign(agents, adapter.recommendedAgents(adapter.fallbackRecommendationModels));
+    }
   }
 
   return {
@@ -204,23 +116,24 @@ async function setupPrompt(
   availability: CliAvailability,
   context?: ToolExecutionContext,
 ): Promise<string> {
-  const runnerDiscovery = await Promise.all(RUNNER_NAMES.map(async (runner) => {
+  const runnerDiscovery = await Promise.all(getRunnerAdapters().map(async (adapter) => {
+    const runner = adapter.name;
     const installed = availability[runner];
     const probeConfig = defaultAgentConfig(runner, installed);
     const models = installed ? await safeListModels(probeConfig, context) : [];
     return {
       runner,
-      command: runner,
+      command: adapter.defaultCommand,
       installed,
       models,
       modelDiscovery: installed
-        ? modelDiscoveryDescription(runner)
+        ? adapter.modelDiscoveryDescription
         : 'CLI not found on PATH',
     };
   }));
 
   const configuredAgents = config.userConfig
-    ? await Promise.all(Object.entries(config.userConfig.agents).map(async ([agent, agentConfig]) => ({
+    ? Object.entries(config.userConfig.agents).map(([agent, agentConfig]) => ({
         agent,
         tool: askToolName(agent),
         runner: agentConfig.runner,
@@ -231,7 +144,7 @@ async function setupPrompt(
         reasoningEffort: agentConfig.reasoningEffort,
         extraArgs: agentConfig.extraArgs,
         configuredModels: uniqueStrings([...(agentConfig.models ?? []), agentConfig.model]),
-      })))
+      }))
     : [];
 
   const currentState = {
@@ -268,7 +181,7 @@ async function setupPrompt(
     '7. For Claude and Gemini, prefer CLI aliases unless the user explicitly asks for a full model name: Claude aliases are sonnet, opus, haiku; Gemini aliases are auto, pro, flash, flash-lite.',
     '8. For OpenCode, do not choose models starting with `opencode/` by default; prefer real provider-prefixed models such as deepseek/..., moonshot/..., github-copilot/..., or another user-selected provider model.',
     '9. Use config `reasoningEffort` for default effort controls. Ask tools also accept an `effort` argument to override it for one call.',
-    '10. Sidekick maps effort to Claude `--effort`, Codex `--config model_reasoning_effort=...`, and OpenCode `--variant`. Gemini CLI has no direct reasoning-effort flag.',
+    '10. Sidekick maps effort to Claude `--effort` (`low`, `medium`, `high`), Codex `--config model_reasoning_effort=...` (`minimal`, `low`, `medium`, `high`), and OpenCode `--variant` (simple variant name). Gemini CLI has no direct reasoning-effort flag, so ask tools reject `effort` for Gemini agents.',
     '11. Use `extraArgs` for other advanced CLI/model options such as thinking budgets, provider-specific flags, or approval tuning.',
     '12. Gemini automatically gets `--skip-trust` from Sidekick. Only add Gemini `extraArgs` for extra behavior beyond that default.',
     '13. Ask tools run in the MCP client project root when the client supports roots; otherwise they use the MCP server launch directory.',
@@ -282,10 +195,6 @@ async function setupPrompt(
     '',
     jsonText(buildRecommendedConfig(runnerDiscovery)),
   ].join('\n');
-}
-
-function cleanupHint(taskId: string): string {
-  return `When you are done inspecting or merging this worktree, call cleanup_worktree with taskId "${taskId}".`;
 }
 
 function askToolName(agentName: string): string {
@@ -318,7 +227,7 @@ function askPromptDescription(agentName: string): string {
 
 function createAskTool(
   config: SidekickConfig,
-  metadataStore: TaskMetadataStore,
+  taskRunner: TaskRunCoordinator,
   agentName: string,
   agentConfig: AgentConfig,
 ): UnifiedTool {
@@ -334,109 +243,21 @@ function createAskTool(
     },
     async execute(args, context?: ToolExecutionContext) {
       const parsed = AskTaskSchema.parse(args);
-      const taskId = context?.taskId ?? randomUUID();
-      const executionContext: ToolExecutionContext = { ...context, taskId };
+      getRunner(agentConfig.runner).validateEffort(parsed.effort);
       const mode = resolveMode(config, parsed.mode);
       const worktreeMode = resolveWorktree(config, mode, parsed.worktree);
-      const effectiveAgentConfig = parsed.effort
-        ? { ...agentConfig, reasoningEffort: parsed.effort }
-        : agentConfig;
-      const model = agentConfig.model ?? '';
-      const baseCwd = executionContext.cwd ?? process.cwd();
 
-      const worktree = await createWorktree({
-        agent: agentConfig.runner,
-        taskId,
-        baseCwd,
-        mode: worktreeMode,
-        worktreeRootDir: config.worktreeRootDir,
-        context: executionContext,
-      });
-
-      const metadata = await metadataStore.create({
-        taskId,
+      const response = await taskRunner.run({
+        agentName,
+        agentConfig,
+        prompt: parsed.prompt,
         title: parsed.title,
-        status: 'running',
-        agent: agentName,
-        runner: agentConfig.runner,
-        model,
         mode,
-        baseCwd,
-        worktree,
+        worktreeMode,
+        effort: parsed.effort,
+        context,
       });
-
-      const progressRenderer = createCliProgressRenderer(effectiveAgentConfig.runner);
-      let capturedStdout = '';
-      const progress = (chunk: string) => {
-        capturedStdout += chunk;
-        void metadataStore.appendStdout(taskId, chunk);
-        for (const message of progressRenderer.onChunk(chunk)) {
-          executionContext.onProgress?.(message);
-        }
-      };
-
-      try {
-        const runner = getRunner(effectiveAgentConfig.runner);
-        const result = await runner.run({
-          agent: effectiveAgentConfig.runner,
-          model,
-          prompt: parsed.prompt,
-          mode,
-          cwd: worktree.cwd,
-          env: executionContext.env,
-          agentConfig: effectiveAgentConfig,
-          worktree,
-          context: {
-            ...executionContext,
-            cwd: worktree.cwd,
-            onProgress: progress,
-          },
-        });
-
-        if (result.stdout && capturedStdout !== result.stdout) {
-          const missingStdout = result.stdout.startsWith(capturedStdout)
-            ? result.stdout.slice(capturedStdout.length)
-            : `${capturedStdout ? '\n' : ''}${result.stdout}`;
-          await metadataStore.appendStdout(taskId, missingStdout);
-        }
-        for (const message of progressRenderer.flush()) {
-          executionContext.onProgress?.(message);
-        }
-        const extracted = extractRunOutput(effectiveAgentConfig.runner, result.stdout);
-        await metadataStore.update(taskId, {
-          status: 'completed',
-          exitCode: result.exitCode,
-        });
-
-        const response = {
-          taskId,
-          status: 'completed',
-          agent: agentName,
-          runner: effectiveAgentConfig.runner,
-          model: model || '(cli default)',
-          ...(effectiveAgentConfig.reasoningEffort ? { effort: effectiveAgentConfig.reasoningEffort } : {}),
-          mode,
-          worktree,
-          logs: {
-            stdout: metadata.stdoutPath,
-            stderr: metadata.stderrPath,
-            result: metadata.resultPath,
-          },
-          cleanupHint: cleanupHint(taskId),
-          answer: extracted.answer,
-          ...(extracted.stats ? { stats: extracted.stats } : {}),
-        };
-        await metadataStore.writeResult(taskId, response);
-        return jsonText(response);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        await metadataStore.appendStderr(taskId, `${message}\n`);
-        await metadataStore.update(taskId, {
-          status: executionContext.signal?.aborted ? 'cancelled' : 'failed',
-          error: message,
-        });
-        throw error;
-      }
+      return jsonText(response);
     },
   };
 }
@@ -446,6 +267,7 @@ export function createSidekickTools(
   availability: CliAvailability,
 ): UnifiedTool[] {
   const metadataStore = new TaskMetadataStore(config.taskRootDir);
+  const taskRunner = new TaskRunCoordinator(config, metadataStore);
 
   const setupTool: UnifiedTool = {
     name: 'setup',
@@ -467,7 +289,7 @@ export function createSidekickTools(
     .filter(([, agentConfig]) => agentConfig.enabled)
     .map(([agentName, agentConfig]) => createAskTool(
       config,
-      metadataStore,
+      taskRunner,
       agentName,
       agentConfig,
     )) : [];
@@ -497,7 +319,7 @@ export function createSidekickTools(
       const userConfig = config.userConfig;
       const agents = await Promise.all(Object.entries(userConfig.agents).map(async ([agentName, agentConfig]) => {
         const models = agentConfig.enabled
-          ? await getRunner(agentConfig.runner).listModels(agentConfig, context)
+          ? await safeListModels(agentConfig, context)
           : [];
         return {
           agent: agentName,

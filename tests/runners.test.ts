@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/utils/commandExecutor.js', async (importOriginal) => {
@@ -9,9 +11,11 @@ vi.mock('../src/utils/commandExecutor.js', async (importOriginal) => {
 });
 
 import type { AgentConfig } from '../src/config.js';
-import { getRunner } from '../src/runners/registry.js';
-import type { RunRequest, WorktreeHandle } from '../src/runners/types.js';
+import { BaseRunner } from '../src/runners/base.js';
+import { getRunner, getRunnerAdapters } from '../src/runners/registry.js';
+import type { RunRequest } from '../src/runners/types.js';
 import { executeCommand } from '../src/utils/commandExecutor.js';
+import type { WorktreeHandle } from '../src/worktrees/types.js';
 
 const agentConfig: AgentConfig = {
   runner: 'codex',
@@ -136,9 +140,9 @@ describe('runners', () => {
   it('maps reasoningEffort to runner-specific CLI flags', () => {
     const claudeArgs = getRunner('claude').buildArgs(request({
       agent: 'claude',
-      agentConfig: { ...agentConfig, runner: 'claude', reasoningEffort: 'xhigh' },
+      agentConfig: { ...agentConfig, runner: 'claude', reasoningEffort: 'high' },
     }));
-    expect(claudeArgs).toEqual(expect.arrayContaining(['--effort', 'xhigh']));
+    expect(claudeArgs).toEqual(expect.arrayContaining(['--effort', 'high']));
 
     const codexArgs = getRunner('codex').buildArgs(request({
       agentConfig: { ...agentConfig, reasoningEffort: 'high' },
@@ -280,5 +284,76 @@ describe('runners', () => {
     })).resolves.toEqual(['sonnet', 'opus', 'haiku']);
 
     expect(executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('exposes runner behavior through adapter capabilities', () => {
+    const adapters = getRunnerAdapters();
+
+    expect(adapters.map((adapter) => adapter.name)).toEqual([
+      'claude',
+      'gemini',
+      'codex',
+      'opencode',
+    ]);
+    for (const adapter of adapters) {
+      expect(adapter).toBeInstanceOf(BaseRunner);
+      expect(adapter.defaultCommand).toBe(adapter.name);
+      expect(adapter.modelDiscoveryDescription.length).toBeGreaterThan(0);
+      expect(['native', 'managed']).toContain(adapter.worktreeSupport);
+      expect(adapter.buildArgs(request({
+        agent: adapter.name,
+        agentConfig: { ...agentConfig, runner: adapter.name },
+      }))).toContain('do work');
+      expect(adapter.extractOutput('plain answer')).toEqual({ answer: 'plain answer' });
+      expect(adapter.createProgressRenderer().flush()).toEqual([]);
+    }
+    expect(() => getRunner('gemini').validateEffort('high')).toThrow(
+      'Runner "gemini" does not support effort overrides.',
+    );
+    expect(() => getRunner('codex').validateEffort('extreme')).toThrow(
+      'Runner "codex" effort must be one of: minimal, low, medium, high.',
+    );
+    expect(getRunner('claude').worktreeSupport).toBe('native');
+    expect(getRunner('gemini').worktreeSupport).toBe('native');
+    expect(getRunner('codex').worktreeSupport).toBe('managed');
+    expect(getRunner('opencode').worktreeSupport).toBe('managed');
+  });
+
+  it('keeps setup recommendation templates on runner instances', () => {
+    expect(getRunner('gemini').recommendedAgents(['auto'])).toEqual({
+      gemini: {
+        runner: 'gemini',
+        model: 'auto',
+        extraArgs: [],
+        description: 'Ask Gemini for broad reasoning and implementation review.',
+      },
+    });
+    expect(getRunner('opencode').recommendedAgents([
+      'deepseek/deepseek-chat',
+      'moonshot/kimi-k2',
+    ])).toEqual({
+      deepseek: {
+        runner: 'opencode',
+        model: 'deepseek/deepseek-chat',
+        reasoningEffort: 'high',
+        extraArgs: [],
+        description: 'Ask DeepSeek through OpenCode with high reasoning effort.',
+      },
+      kimi: {
+        runner: 'opencode',
+        model: 'moonshot/kimi-k2',
+        extraArgs: [],
+        description: 'Ask Kimi through OpenCode.',
+      },
+    });
+  });
+
+  it('keeps shared output and progress modules generic', () => {
+    const outputSource = readFileSync(new URL('../src/runners/output.ts', import.meta.url), 'utf8');
+    const progressSource = readFileSync(new URL('../src/runners/progress.ts', import.meta.url), 'utf8');
+    const runnerNames = /\b(claude|gemini|codex|opencode|Claude|Gemini|Codex|OpenCode|RunnerName)\b/;
+
+    expect(outputSource).not.toMatch(runnerNames);
+    expect(progressSource).not.toMatch(runnerNames);
   });
 });

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractRunOutput } from '../src/runners/output.js';
+import { getRunner } from '../src/runners/registry.js';
 
 describe('CLI output extraction', () => {
   it('extracts Claude final result text when available', () => {
-    const output = extractRunOutput('claude', [
+    const output = getRunner('claude').extractOutput([
       JSON.stringify({
         type: 'assistant',
         message: { content: [{ type: 'text', text: 'intermediate text' }] },
@@ -17,7 +17,7 @@ describe('CLI output extraction', () => {
   });
 
   it('concatenates Gemini streamed assistant deltas and stats', () => {
-    const output = extractRunOutput('gemini', [
+    const output = getRunner('gemini').extractOutput([
       JSON.stringify({ type: 'init', model: 'gemini-3.1-pro-preview' }),
       JSON.stringify({ type: 'message', role: 'assistant', content: 'Hello', delta: true }),
       JSON.stringify({ type: 'message', role: 'assistant', content: ' world.', delta: true }),
@@ -32,7 +32,7 @@ describe('CLI output extraction', () => {
   });
 
   it('extracts Codex agent messages and usage', () => {
-    const output = extractRunOutput('codex', [
+    const output = getRunner('codex').extractOutput([
       JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'Tests pass.' } }),
       JSON.stringify({ type: 'turn.completed', usage: { total_tokens: 99 } }),
       '',
@@ -45,7 +45,7 @@ describe('CLI output extraction', () => {
   });
 
   it('extracts OpenCode text parts and token stats', () => {
-    const output = extractRunOutput('opencode', [
+    const output = getRunner('opencode').extractOutput([
       JSON.stringify({ type: 'text', part: { type: 'text', text: 'Done.' } }),
       JSON.stringify({ type: 'step_finish', part: { tokens: { total: 12 } } }),
       '',
@@ -58,7 +58,7 @@ describe('CLI output extraction', () => {
   });
 
   it('falls back to trimmed non-json output without returning unlimited text', () => {
-    const output = extractRunOutput('claude', 'plain answer\n');
+    const output = getRunner('claude').extractOutput('plain answer\n');
 
     expect(output).toEqual({ answer: 'plain answer' });
   });

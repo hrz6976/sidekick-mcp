@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { RunnerName, SidekickMode } from '../config.js';
-import type { WorktreeHandle } from '../runners/types.js';
+import type { WorktreeHandle } from '../worktrees/types.js';
 
 export type SidekickTaskStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 

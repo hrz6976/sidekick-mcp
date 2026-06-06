@@ -46,12 +46,6 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.5"
   },
-  "overrides": {
-    "@hono/node-server": "^1.19.14",
-    "hono": "^4.12.14",
-    "path-to-regexp": "^8.4.2",
-    "picomatch": "^4.0.4"
-  },
   "publishConfig": {
     "access": "public",
     "provenance": true

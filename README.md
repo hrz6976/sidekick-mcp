@@ -136,7 +136,7 @@ Each key under `agents` becomes a tool named `ask_<key>`. The `runner` field sel
 
 For Claude and Gemini, use CLI aliases unless you intentionally need a full model name. Claude aliases are `sonnet`, `opus`, and `haiku`; Gemini aliases are `auto`, `pro`, `flash`, and `flash-lite`. For OpenCode, avoid `opencode/` models as defaults; choose a real provider-prefixed model such as `deepseek/...`, `moonshot/...`, or `github-copilot/...`.
 
-Ask tools also accept an `effort` argument for one-off overrides, for example `{ "prompt": "review this diff", "mode": "read-only", "effort": "high" }`. Effective effort maps to Claude `--effort`, Codex `--config model_reasoning_effort=...`, and OpenCode `--variant`. Gemini CLI does not currently expose a direct headless reasoning-effort flag; use Gemini settings or `extraArgs` for provider-specific thinking configuration.
+Ask tools also accept an `effort` argument for one-off overrides, for example `{ "prompt": "review this diff", "mode": "read-only", "effort": "high" }`. Effective effort maps to Claude `--effort` (`low`, `medium`, `high`), Codex `--config model_reasoning_effort=...` (`minimal`, `low`, `medium`, `high`), and OpenCode `--variant` with a simple variant name. Gemini CLI does not currently expose a direct headless reasoning-effort flag, so Gemini agents reject `effort`; use Gemini settings or `extraArgs` for provider-specific thinking configuration.
 
 Gemini gets `--skip-trust` by default from Sidekick, so it does not need to be repeated in config.
 
