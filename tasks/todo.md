@@ -570,6 +570,9 @@
   - `npm run test:e2e` (`SIDEKICK_E2E_OK`)
   - `git diff --check`
   - `git fetch origin main` and `git rev-list --left-right --count HEAD...origin/main` returned `0 0`.
+- Pushed commit `31cd8ae` to `origin/main`; it triggered Release & Publish run `27057356219`.
+- Run `27057356219` correctly detected `0.1.0` was already published, but failed in the bump job because required GitHub App secrets were not configured: `APP_ID` / `APP_PRIVATE_KEY` caused `[@octokit/auth-app] appId option is required`.
+- Because the automated bump path is externally blocked, local package metadata was bumped with `npm version patch --no-git-tag-version` to `0.1.1`; pushing that follow-up commit should trigger the publish path directly because `0.1.1` is not on npm yet.
 
 ## Project Simplification
 
