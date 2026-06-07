@@ -14,13 +14,14 @@ import {
 } from './output.js';
 import {
   createJsonLineProgressRenderer,
+  formatToolLabel,
   formatTokenStats,
   getPath,
   getString,
   isObject,
   lastMeaningfulLine,
   preview,
-  toolNameFrom,
+  toolInfoFrom,
   type CliProgressRenderer,
   type JsonObject,
 } from './progress.js';
@@ -251,16 +252,16 @@ export class OpenCodeRunner extends BaseRunner {
       return ['OpenCode is reasoning...'];
     }
     if (type === 'tool_use') {
-      const tool = getString(part?.tool) ?? toolNameFrom(part) ?? toolNameFrom(event);
+      const info = toolInfoFrom(event);
+      const tool = info.name;
       const status = getString(getPath(part, ['state', 'status']));
-      const title = preview(getPath(part, ['state', 'title']), 80);
       const exitCode = getPath(part, ['state', 'metadata', 'exit']);
       const lastOutput = lastMeaningfulLine(getPath(part, ['state', 'output']) ?? getPath(part, ['state', 'metadata', 'output']));
       if (status === 'error') {
         const error = preview(getPath(part, ['state', 'error']));
-        return [`OpenCode tool failed${tool ? `: ${tool}` : ''}${error ? `: ${error}` : ''}`];
+        return [`OpenCode tool failed: ${formatToolLabel(info, tool ?? 'tool')}${error ? `: ${error}` : ''}`];
       }
-      return [`OpenCode tool completed${tool ? `: ${tool}` : ''}${title ? ` (${title})` : ''}${typeof exitCode === 'number' ? ` exit ${exitCode}` : ''}${lastOutput ? `: ${lastOutput}` : ''}`];
+      return [`OpenCode tool completed: ${formatToolLabel(info, tool ?? 'tool')}${typeof exitCode === 'number' ? ` exit ${exitCode}` : ''}${lastOutput ? `: ${lastOutput}` : ''}`];
     }
     if (type === 'error') {
       const message = preview(

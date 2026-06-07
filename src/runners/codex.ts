@@ -14,12 +14,14 @@ import {
 } from './output.js';
 import {
   createJsonLineProgressRenderer,
+  formatToolLabel,
   formatTokenStats,
   getPath,
   getString,
   isObject,
   lastMeaningfulLine,
   preview,
+  toolInfoFrom,
   type CliProgressRenderer,
   type JsonObject,
 } from './progress.js';
@@ -322,7 +324,8 @@ export class CodexRunner extends BaseRunner {
       const tool = getString(item.tool);
       const status = getString(item.status);
       const name = [server, tool].filter(Boolean).join('.');
-      return [`Codex ${eventType === 'item.completed' ? status === 'failed' ? 'failed MCP tool' : 'completed MCP tool' : 'calling MCP tool'}${name ? ` ${name}` : ''}`];
+      const info = { ...toolInfoFrom(item), name: name || tool };
+      return [`Codex ${eventType === 'item.completed' ? status === 'failed' ? 'failed MCP tool' : 'completed MCP tool' : 'calling MCP tool'} ${formatToolLabel(info, 'MCP tool')}`];
     }
     if (itemType === 'web_search') {
       const query = preview(item.query, 120);

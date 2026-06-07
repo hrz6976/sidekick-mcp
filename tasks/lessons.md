@@ -14,4 +14,5 @@
 - Prefer complete public/internal names over unclear abbreviations after the user corrects naming. For trajectory export, use `trajectory` in filenames, types, tests, and helpers.
 - When a parameter can be either enabled by a boolean or redirected by a path, model the public request as one field with a union type, such as `trajectory?: boolean | string`, instead of splitting it into flag and path fields.
 - Do not use different names for the same public concept across config, CLI, and MCP. Use `effort` consistently for Sidekick effort controls, and keep old names only as documented compatibility aliases.
+- When asked to continue after a remote update may exist, check upstream status and pull/rebase before starting new source edits; preserve local work with autostash or an explicit stash and resolve conflicts by keeping both relevant task records.
 - Release automation should treat a pushed git tag as the release intent. Do not infer release actions from pushes to `main`, and do not create automated version bump PRs; validate that `vX.Y.Z` matches `package.json` before publishing.

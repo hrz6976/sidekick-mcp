@@ -13,7 +13,15 @@ describe('CLI progress renderer', () => {
         message: {
           content: [
             { type: 'text', text: 'I will inspect the code.' },
-            { type: 'tool_use', name: 'Bash', input: { command: 'npm test' } },
+            { type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'npm test' } },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: 'user',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_1', content: 'PASS', is_error: false },
           ],
         },
       }),
@@ -29,7 +37,8 @@ describe('CLI progress renderer', () => {
     ].join('\n'))).toEqual([
       'Claude started (sonnet)',
       'Claude: I will inspect the code.',
-      'Claude using Bash',
+      'Claude using Bash: npm test',
+      'Claude completed Bash: npm test',
       'Claude retrying API request 1/3 in 2s (rate_limit)',
     ]);
   });
@@ -41,13 +50,20 @@ describe('CLI progress renderer', () => {
       JSON.stringify({ type: 'init', model: 'gemini-2.5-pro' }),
       JSON.stringify({ type: 'message', role: 'user', content: 'ignored prompt' }),
       JSON.stringify({ type: 'message', role: 'assistant', content: 'I am checking that now.', delta: true }),
-      JSON.stringify({ type: 'tool_use', name: 'read_file' }),
+      JSON.stringify({
+        type: 'tool_use',
+        tool_name: 'read_file',
+        tool_id: 'read_file_1',
+        parameters: { file_path: '/repo/README.md' },
+      }),
+      JSON.stringify({ type: 'tool_result', tool_id: 'read_file_1', status: 'success' }),
       JSON.stringify({ type: 'result', status: 'success', stats: { total_tokens: 1234, tool_calls: 1 } }),
       '',
     ].join('\n'))).toEqual([
       'Gemini started (gemini-2.5-pro)',
       'Gemini: I am checking that now.',
-      'Gemini using read_file',
+      'Gemini using read_file: repo/README.md',
+      'Gemini completed read_file: repo/README.md',
       'Gemini completed (1234 tokens, 1 tool calls)',
     ]);
   });
@@ -85,6 +101,17 @@ describe('CLI progress renderer', () => {
           text: 'Tests pass.',
         },
       }),
+      JSON.stringify({
+        type: 'item.completed',
+        item: {
+          id: 'mcp-1',
+          type: 'mcp_tool_call',
+          server: 'sidekick',
+          tool: 'ask_gemini',
+          status: 'completed',
+          arguments: { file_path: '/repo/src/index.ts' },
+        },
+      }),
       JSON.stringify({ msg: { type: 'text', content: 'legacy text event' } }),
       '',
     ].join('\n'))).toEqual([
@@ -93,6 +120,7 @@ describe('CLI progress renderer', () => {
       'Codex running command: npm test',
       'Codex command output: PASS tests',
       'Codex: Tests pass.',
+      'Codex completed MCP tool sidekick.ask_gemini: src/index.ts',
       'Codex: legacy text event',
     ]);
   });
@@ -110,6 +138,7 @@ describe('CLI progress renderer', () => {
           tool: 'bash',
           state: {
             status: 'completed',
+            input: { command: 'npm test' },
             title: 'Run tests',
             output: 'setup\nPASS\n',
             metadata: { exit: 0 },
@@ -122,7 +151,7 @@ describe('CLI progress renderer', () => {
     ].join('\n'))).toEqual([
       'OpenCode step started',
       'OpenCode is reasoning...',
-      'OpenCode tool completed: bash (Run tests) exit 0: PASS',
+      'OpenCode tool completed: bash: npm test exit 0: PASS',
       'OpenCode: Done.',
       'OpenCode step completed (42 tokens)',
     ]);

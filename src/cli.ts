@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -318,7 +319,22 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   await execute(parsed);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+function realpathOrResolve(filePath: string): string {
+  try {
+    return realpathSync(filePath);
+  } catch {
+    return path.resolve(filePath);
+  }
+}
+
+export function isDirectCliEntrypoint(importMetaUrl: string, argvPath: string | undefined): boolean {
+  if (!argvPath) {
+    return false;
+  }
+  return realpathOrResolve(fileURLToPath(importMetaUrl)) === realpathOrResolve(argvPath);
+}
+
+if (isDirectCliEntrypoint(import.meta.url, process.argv[1])) {
   main().catch((error) => {
     if (process.argv.slice(2).includes('--json')) {
       const message = error instanceof Error ? error.message : String(error);

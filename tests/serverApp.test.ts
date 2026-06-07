@@ -396,7 +396,7 @@ describe('serverApp', () => {
 
     expect(result.isError).toBe(false);
     const messages = onprogress.mock.calls.map(([progress]) => String(progress.message ?? ''));
-    expect(messages).toContain('Claude using Bash');
+    expect(messages).toContain('Claude using Bash: npm test');
     expect(messages.some((message) => message.includes('"type":"assistant"'))).toBe(false);
   });
 

@@ -1,5 +1,29 @@
 # Sidekick MCP Rewrite Todo
 
+## v0.1.3 CLI Entrypoint / Progress Release
+
+- [x] Pull latest `origin/main` and keep local entrypoint/progress changes.
+- [x] Update `package.json` and `package-lock.json` from `0.1.2` to `0.1.3`.
+- [x] Run release verification.
+- [x] Commit with required Claude, Codex, and Gemini authorship reference.
+- [x] Create and push matching `v0.1.3` tag.
+- [x] Add review/results and final handoff note.
+
+### v0.1.3 CLI Entrypoint / Progress Release Notes
+
+- Release includes the symlink-aware `sidekick` CLI entrypoint guard and richer tool progress labels.
+- Package metadata now uses `0.1.3`; release tag must be `v0.1.3`.
+- Verification passed:
+  - `npm run lint`
+  - `npm test` (16 files / 129 tests)
+  - `npm run build`
+  - `npm run test:sidekick:e2e` (`SIDEKICK_COMMAND_E2E_OK`)
+  - `npm run test:mcp:e2e` (`SIDEKICK_E2E_OK`)
+  - `npm run copy:ensemble-sidekick`
+  - `git diff --check`
+- Commit message uses the required authorship phrase "Claude, Codex, and Gemini".
+- Release will be pushed as `main` plus tag `v0.1.3`; the tag-only workflow validates the tag/package version match before publishing.
+
 ## Tag-Only Release Workflow
 
 - [x] Remove push-to-main / workflow_dispatch release triggers.
@@ -19,6 +43,58 @@
 - Verification passed:
   - `git diff --check -- .github/workflows/release.yml AGENTS.md tasks/lessons.md tasks/todo.md`
   - Node workflow text check confirmed tag trigger only, no `workflow_dispatch`, no main branch trigger, no decide job, no bump PR path, package version read, tag comparison, and publish depends on tests.
+
+## CLI Symlink Entrypoint Guard
+
+- [x] Confirm current worktree status and inherited Sidekick CLI context.
+- [x] Reproduce/cover the `sidekick` symlink entrypoint guard mismatch.
+- [x] Fix `src/cli.ts` so direct execution works when `process.argv[1]` is a symlink.
+- [x] Run focused tests plus full verification.
+- [x] Add review/results and write final handoff note.
+
+### CLI Symlink Entrypoint Guard Review / Results
+
+- Fixed `src/cli.ts` entrypoint detection by resolving both `import.meta.url` and `process.argv[1]` through `realpathSync`, falling back to `path.resolve` if realpath fails.
+- Added a unit regression for symlink-aware direct execution detection in `tests/cli.test.ts`.
+- Added bundled command E2E coverage that launches `dist/sidekick.mjs` through an actual symlink and verifies `sidekick list --json` runs instead of silently exiting.
+- Verification passed:
+  - `npm test -- tests/cli.test.ts`
+  - `npm run lint`
+  - `npm test` (16 files / 129 tests)
+  - `npm run test:sidekick:e2e` (`SIDEKICK_COMMAND_E2E_OK`)
+  - `npm run test:mcp:e2e` (`SIDEKICK_E2E_OK`)
+  - `npm run copy:ensemble-sidekick` after serial rerun
+  - `git diff --check`
+- Note: the first `npm run copy:ensemble-sidekick` attempt failed because it ran in parallel with `npm run test:mcp:e2e`; the MCP E2E build cleaned `dist/` between bundle generation and copy. The known race was resolved by rerunning the copy step serially.
+- Pre-existing local change left untouched: `package-lock.json` already had a modified `bin.sidekick` entry before this fix.
+
+## CLI Progress Tool Labels
+
+- [x] Pull latest `origin/main` while preserving local entrypoint changes.
+- [x] Add shared tool id/name/summary helpers for progress rendering.
+- [x] Remember Claude/Gemini tool names between `tool_use` and `tool_result` events.
+- [x] Improve low-risk tool summaries for OpenCode/Codex where useful.
+- [x] Add progress renderer regression tests.
+- [x] Run verification and document results.
+
+### CLI Progress Tool Labels Review / Results
+
+- Pulled latest `origin/main` (`6f99f0f ci: release only from version tags`) with `git pull --rebase --autostash`.
+- Resolved the `tasks/todo.md` autostash conflict by keeping both the new tag-only release notes and the local CLI symlink entrypoint notes.
+- Dropped the now-duplicate autostash after confirming local entrypoint changes survived in the worktree.
+- Added shared progress helpers for tool id/name extraction, path/command/title/query summaries, and formatted tool labels.
+- Claude and Gemini progress renderers now remember tool metadata by id for each renderer instance, so `tool_result` events can report the original tool name and summary.
+- Codex MCP tool progress now includes a short argument summary when available.
+- OpenCode tool progress now uses the same tool label summary logic.
+- Updated progress renderer and serverApp progress tests for richer output.
+- Verification passed:
+  - `npm test -- tests/progressRenderer.test.ts`
+  - `npm run lint`
+  - `npm test` (16 files / 129 tests)
+  - `npm run test:sidekick:e2e` (`SIDEKICK_COMMAND_E2E_OK`)
+  - `npm run test:mcp:e2e` (`SIDEKICK_E2E_OK`)
+  - `npm run copy:ensemble-sidekick`
+  - `git diff --check`
 
 ## sidekick Command for Ensemble Skill
 

@@ -1,6 +1,11 @@
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
-import { parseCliArgs } from '../src/cli.js';
+import { isDirectCliEntrypoint, parseCliArgs } from '../src/cli.js';
 
 describe('sidekick CLI argument parsing', () => {
   it('parses run commands for ensemble prompt files', () => {
@@ -106,5 +111,23 @@ describe('sidekick CLI argument parsing', () => {
       taskId: 'task-1',
       force: true,
     });
+  });
+
+  it('detects direct execution when the CLI path is a symlink', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'sidekick-cli-entry-'));
+    try {
+      const target = path.join(root, 'sidekick.mjs');
+      const link = path.join(root, 'sidekick-link.mjs');
+      const other = path.join(root, 'other.mjs');
+      writeFileSync(target, '', 'utf8');
+      writeFileSync(other, '', 'utf8');
+      symlinkSync(target, link);
+
+      expect(isDirectCliEntrypoint(pathToFileURL(target).href, link)).toBe(true);
+      expect(isDirectCliEntrypoint(pathToFileURL(target).href, other)).toBe(false);
+      expect(isDirectCliEntrypoint(pathToFileURL(target).href, undefined)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

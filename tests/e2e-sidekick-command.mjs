@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -136,6 +136,19 @@ try {
   assert.equal(listed.agents.length, 1);
   assert.equal(listed.agents[0].agent, 'codex');
   assert.equal(listed.agents[0].runner, 'codex');
+
+  const sidekickLink = path.join(root, 'sidekick-link.mjs');
+  symlinkSync(path.join(repoRoot, 'dist', 'sidekick.mjs'), sidekickLink);
+  const listedViaSymlink = JSON.parse(run(process.execPath, [sidekickLink, 'list', '--json'], {
+    cwd: repo,
+    env: {
+      ...process.env,
+      ...env,
+      SIDEKICK_STDERR_LOG_LEVEL: 'silent',
+    },
+  }));
+  assert.equal(listedViaSymlink.agents.length, 1);
+  assert.equal(listedViaSymlink.agents[0].agent, 'codex');
 
   const runResult = sidekick([
     'run',

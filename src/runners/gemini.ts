@@ -11,13 +11,16 @@ import {
 } from './output.js';
 import {
   createJsonLineProgressRenderer,
+  formatToolLabel,
   formatTokenStats,
   getPath,
   getString,
   preview,
-  toolNameFrom,
+  toolIdFrom,
+  toolInfoFrom,
   type CliProgressRenderer,
   type JsonObject,
+  type ToolProgressInfo,
 } from './progress.js';
 import {
   agentTextStep,
@@ -102,7 +105,8 @@ export class GeminiRunner extends BaseRunner {
   }
 
   createProgressRenderer(): CliProgressRenderer {
-    return createJsonLineProgressRenderer('gemini', (event) => this.renderProgressEvent(event));
+    const toolsById = new Map<string, ToolProgressInfo>();
+    return createJsonLineProgressRenderer('gemini', (event) => this.renderProgressEvent(event, toolsById));
   }
 
   validateEffort(effort?: string): void {
@@ -148,7 +152,20 @@ export class GeminiRunner extends BaseRunner {
     return answer ? { answer, ...(stats ? { stats } : {}) } : undefined;
   }
 
-  private renderProgressEvent(event: JsonObject): string[] {
+  private rememberToolUse(toolsById: Map<string, ToolProgressInfo>, value: unknown): ToolProgressInfo {
+    const info = toolInfoFrom(value);
+    if (info.id) {
+      toolsById.set(info.id, { ...toolsById.get(info.id), ...info });
+    }
+    return info;
+  }
+
+  private toolInfoForResult(toolsById: Map<string, ToolProgressInfo>, value: unknown): ToolProgressInfo {
+    const id = toolIdFrom(value);
+    return (id ? toolsById.get(id) : undefined) ?? toolInfoFrom(value);
+  }
+
+  private renderProgressEvent(event: JsonObject, toolsById: Map<string, ToolProgressInfo>): string[] {
     const type = getString(event.type);
     if (type === 'init') {
       const model = getString(event.model);
@@ -162,11 +179,14 @@ export class GeminiRunner extends BaseRunner {
       return text ? [`Gemini: ${text}`] : [];
     }
     if (type === 'tool_use') {
-      return [`Gemini using ${toolNameFrom(event) ?? 'a tool'}`];
+      const info = this.rememberToolUse(toolsById, event);
+      return [`Gemini using ${formatToolLabel(info)}`];
     }
     if (type === 'tool_result') {
-      const name = toolNameFrom(event);
-      return [`Gemini received${name ? ` ${name}` : ' tool'} result`];
+      const info = this.toolInfoForResult(toolsById, event);
+      const status = getString(event.status);
+      const error = preview(getPath(event, ['error', 'message']) ?? event.error);
+      return [`Gemini ${status === 'error' ? 'failed' : 'completed'} ${formatToolLabel(info, 'tool')}${error ? `: ${error}` : ''}`];
     }
     if (type === 'error') {
       const message = preview(event.message ?? event.error);

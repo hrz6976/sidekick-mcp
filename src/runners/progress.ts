@@ -6,6 +6,7 @@ export interface CliProgressRenderer {
 export type JsonObject = Record<string, unknown>;
 
 const MAX_PROGRESS_MESSAGE_LENGTH = 180;
+const MAX_TOOL_SUMMARY_LENGTH = 90;
 
 export function isObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -74,10 +75,97 @@ export function lastMeaningfulLine(value: unknown, maxLength = 120): string | un
 
 export function toolNameFrom(value: unknown): string | undefined {
   return getString(getPath(value, ['name']))
-    ?? getString(getPath(value, ['tool']))
     ?? getString(getPath(value, ['tool_name']))
+    ?? getString(getPath(value, ['tool']))
+    ?? getString(getPath(value, ['part', 'tool']))
+    ?? getString(getPath(value, ['part', 'name']))
     ?? getString(getPath(value, ['function', 'name']))
     ?? getString(getPath(value, ['input', 'name']));
+}
+
+export interface ToolProgressInfo {
+  id?: string;
+  name?: string;
+  summary?: string;
+}
+
+export function toolIdFrom(value: unknown): string | undefined {
+  return getString(getPath(value, ['id']))
+    ?? getString(getPath(value, ['tool_id']))
+    ?? getString(getPath(value, ['tool_use_id']))
+    ?? getString(getPath(value, ['toolUseId']))
+    ?? getString(getPath(value, ['callID']))
+    ?? getString(getPath(value, ['call_id']))
+    ?? getString(getPath(value, ['part', 'id']))
+    ?? getString(getPath(value, ['part', 'callID']))
+    ?? getString(getPath(value, ['part', 'call_id']));
+}
+
+function compactPath(value: string): string {
+  const normalized = value.replace(/\\/g, '/');
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.length <= 2) {
+    return segments.join('/') || normalized;
+  }
+  return segments.slice(-2).join('/');
+}
+
+function firstPreview(value: unknown, path: string[], pathLike = false): string | undefined {
+  const raw = getPath(value, path);
+  const text = getString(raw);
+  if (!text) {
+    return undefined;
+  }
+  return preview(pathLike ? compactPath(text) : text, MAX_TOOL_SUMMARY_LENGTH);
+}
+
+export function toolSummaryFrom(value: unknown): string | undefined {
+  return firstPreview(value, ['input', 'command'])
+    ?? firstPreview(value, ['parameters', 'command'])
+    ?? firstPreview(value, ['args', 'command'])
+    ?? firstPreview(value, ['arguments', 'command'])
+    ?? firstPreview(value, ['part', 'state', 'input', 'command'])
+    ?? firstPreview(value, ['input', 'file_path'], true)
+    ?? firstPreview(value, ['input', 'filePath'], true)
+    ?? firstPreview(value, ['input', 'path'], true)
+    ?? firstPreview(value, ['parameters', 'file_path'], true)
+    ?? firstPreview(value, ['parameters', 'filePath'], true)
+    ?? firstPreview(value, ['parameters', 'dir_path'], true)
+    ?? firstPreview(value, ['parameters', 'path'], true)
+    ?? firstPreview(value, ['args', 'file_path'], true)
+    ?? firstPreview(value, ['args', 'filePath'], true)
+    ?? firstPreview(value, ['args', 'path'], true)
+    ?? firstPreview(value, ['arguments', 'file_path'], true)
+    ?? firstPreview(value, ['arguments', 'filePath'], true)
+    ?? firstPreview(value, ['arguments', 'path'], true)
+    ?? firstPreview(value, ['part', 'state', 'input', 'filePath'], true)
+    ?? firstPreview(value, ['part', 'state', 'input', 'file_path'], true)
+    ?? firstPreview(value, ['part', 'state', 'input', 'path'], true)
+    ?? firstPreview(value, ['input', 'description'])
+    ?? firstPreview(value, ['parameters', 'title'])
+    ?? firstPreview(value, ['input', 'title'])
+    ?? firstPreview(value, ['part', 'state', 'title'])
+    ?? firstPreview(value, ['title'])
+    ?? firstPreview(value, ['query'])
+    ?? firstPreview(value, ['input', 'query'])
+    ?? firstPreview(value, ['parameters', 'query']);
+}
+
+export function toolInfoFrom(value: unknown): ToolProgressInfo {
+  return {
+    id: toolIdFrom(value),
+    name: toolNameFrom(value),
+    summary: toolSummaryFrom(value),
+  };
+}
+
+export function formatToolLabel(info: ToolProgressInfo | undefined, fallback = 'a tool'): string {
+  const name = info?.name;
+  const summary = info?.summary;
+  if (name && summary) {
+    return `${name}: ${summary}`;
+  }
+  return name ?? summary ?? fallback;
 }
 
 export function createJsonLineProgressRenderer(

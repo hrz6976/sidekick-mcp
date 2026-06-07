@@ -13,13 +13,16 @@ import {
 } from './output.js';
 import {
   createJsonLineProgressRenderer,
+  formatToolLabel,
   getPath,
   getString,
   isObject,
   preview,
-  toolNameFrom,
+  toolIdFrom,
+  toolInfoFrom,
   type CliProgressRenderer,
   type JsonObject,
+  type ToolProgressInfo,
 } from './progress.js';
 import {
   agentTextStep,
@@ -114,7 +117,8 @@ export class ClaudeRunner extends BaseRunner {
   }
 
   createProgressRenderer(): CliProgressRenderer {
-    return createJsonLineProgressRenderer('claude', (event) => this.renderProgressEvent(event));
+    const toolsById = new Map<string, ToolProgressInfo>();
+    return createJsonLineProgressRenderer('claude', (event) => this.renderProgressEvent(event, toolsById));
   }
 
   validateEffort(effort?: string): void {
@@ -235,7 +239,20 @@ export class ClaudeRunner extends BaseRunner {
     return calls;
   }
 
-  private renderProgressEvent(event: JsonObject): string[] {
+  private rememberToolUse(toolsById: Map<string, ToolProgressInfo>, value: unknown): ToolProgressInfo {
+    const info = toolInfoFrom(value);
+    if (info.id) {
+      toolsById.set(info.id, { ...toolsById.get(info.id), ...info });
+    }
+    return info;
+  }
+
+  private toolInfoForResult(toolsById: Map<string, ToolProgressInfo>, value: unknown): ToolProgressInfo {
+    const id = toolIdFrom(value);
+    return (id ? toolsById.get(id) : undefined) ?? toolInfoFrom(value);
+  }
+
+  private renderProgressEvent(event: JsonObject, toolsById: Map<string, ToolProgressInfo>): string[] {
     const type = getString(event.type);
     if (type === 'system') {
       return this.renderSystemEvent(event);
@@ -259,7 +276,7 @@ export class ClaudeRunner extends BaseRunner {
     }
 
     if (type === 'assistant') {
-      return this.renderAssistantEvent(event);
+      return this.renderAssistantEvent(event, toolsById);
     }
 
     if (type === 'user') {
@@ -271,18 +288,21 @@ export class ClaudeRunner extends BaseRunner {
           }
           const failed = part.is_error === true || getPath(event, ['tool_use_result', 'is_error']) === true;
           const stderr = preview(getPath(event, ['tool_use_result', 'stderr']));
-          return [`Claude tool ${failed ? 'failed' : 'completed'}${stderr ? `: ${stderr}` : ''}`];
+          const info = this.toolInfoForResult(toolsById, part);
+          return [`Claude ${failed ? 'failed' : 'completed'} ${formatToolLabel(info, 'tool')}${stderr ? `: ${stderr}` : ''}`];
         });
       }
     }
 
     if (type === 'tool_use') {
-      return [`Claude using ${toolNameFrom(event) ?? 'a tool'}`];
+      const info = this.rememberToolUse(toolsById, event);
+      return [`Claude using ${formatToolLabel(info)}`];
     }
 
     if (type === 'tool_result') {
-      const name = toolNameFrom(event);
-      return [`Claude received${name ? ` ${name}` : ' tool'} result`];
+      const info = this.toolInfoForResult(toolsById, event);
+      const failed = event.is_error === true || event.status === 'error';
+      return [`Claude ${failed ? 'failed' : 'completed'} ${formatToolLabel(info, 'tool')}`];
     }
 
     if (type === 'stream_event') {
@@ -293,7 +313,8 @@ export class ClaudeRunner extends BaseRunner {
       }
       const blockType = getString(getPath(event, ['event', 'content_block', 'type']));
       if (blockType === 'tool_use') {
-        return [`Claude using ${toolNameFrom(getPath(event, ['event', 'content_block'])) ?? 'a tool'}`];
+        const info = this.rememberToolUse(toolsById, getPath(event, ['event', 'content_block']));
+        return [`Claude using ${formatToolLabel(info)}`];
       }
     }
 
@@ -348,7 +369,7 @@ export class ClaudeRunner extends BaseRunner {
     return [];
   }
 
-  private renderAssistantEvent(event: JsonObject): string[] {
+  private renderAssistantEvent(event: JsonObject, toolsById: Map<string, ToolProgressInfo>): string[] {
     const content = event.content ?? getPath(event, ['message', 'content']);
     if (Array.isArray(content)) {
       return content.flatMap((part) => {
@@ -361,7 +382,8 @@ export class ClaudeRunner extends BaseRunner {
           return text ? [`Claude: ${text}`] : [];
         }
         if (partType === 'tool_use' || partType === 'server_tool_use') {
-          return [`Claude using ${toolNameFrom(part) ?? 'a tool'}`];
+          const info = this.rememberToolUse(toolsById, part);
+          return [`Claude using ${formatToolLabel(info)}`];
         }
         return [];
       });
