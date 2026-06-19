@@ -205,7 +205,8 @@ describe('serverApp', () => {
     );
 
     expect(result.isError).toBe(false);
-    expect(result.content[0].text).toContain('"deepseek": {\n      "runner": "opencode",\n      "model": "opencode/deepseek-chat"');
+    expect(result.content[0].text).toContain('"deepseek": {\n      "runner": "opencode"');
+    expect(result.content[0].text).toContain('"modelRef": "runnerDiscovery.opencode.models[0]"');
   });
 
   it('does not duplicate one OpenCode model across DeepSeek and Kimi recommendations', async () => {
@@ -231,7 +232,8 @@ describe('serverApp', () => {
     );
 
     expect(result.isError).toBe(false);
-    expect(result.content[0].text).toContain('"deepseek": {\n      "runner": "opencode",\n      "model": "deepseek/moonshot-v1"');
+    expect(result.content[0].text).toContain('"deepseek": {\n      "runner": "opencode"');
+    expect(result.content[0].text).toContain('"modelRef": "runnerDiscovery.opencode.models[0]"');
     expect(result.content[0].text).not.toContain('"kimi": {');
   });
 

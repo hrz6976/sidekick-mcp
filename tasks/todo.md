@@ -1,5 +1,61 @@
 # Sidekick MCP Rewrite Todo
 
+## v0.1.4 Setup Output Release
+
+- [x] Fetch remote state and confirm local `main` is based on `origin/main`.
+- [x] Bump `package.json` and `package-lock.json` from `0.1.3` to `0.1.4`.
+- [x] Run release verification.
+- [ ] Commit setup-output cleanup with required Claude, Codex, and Gemini authorship reference.
+- [ ] Create matching `v0.1.4` tag and push `main` plus tag.
+- [ ] Record release results and handoff note.
+
+### v0.1.4 Setup Output Release Notes
+
+- Release includes setup-output deduplication:
+  - `recommendedConfigTemplate` uses `modelRef` instead of repeating model strings already present in `runnerDiscovery`.
+  - `configuredModels` no longer duplicates the primary `model`.
+  - Claude/Gemini model-discovery descriptions no longer repeat alias lists already shown in `models`.
+- Package metadata is now `0.1.4`; release tag must be `v0.1.4`.
+- Verification passed:
+  - `npm run lint`
+  - `npm test` (16 files / 132 tests)
+  - `npm run build`
+  - `npm run test:sidekick:e2e` (`SIDEKICK_COMMAND_E2E_OK`)
+  - `npm run test:mcp:e2e` (`SIDEKICK_E2E_OK`)
+  - `npm run copy:ensemble-sidekick`
+  - `git diff --check`
+
+## Setup Output Deduplication
+
+- [x] Smoke `sidekick setup --json` with missing config and real local CLIs.
+- [x] Smoke non-JSON/MCP setup prompt output to measure repeated model names.
+- [x] Smoke loaded-config setup JSON to confirm configured model duplication.
+- [x] Replace duplicate recommendation model strings with `modelRef` references into `runnerDiscovery`.
+- [x] Remove configured model duplication from `configuredModels` summaries.
+- [x] Update setup/list tests and run verification.
+- [x] Record review/results and handoff note.
+
+### Setup Output Deduplication Review / Results
+
+- Smoke finding: missing-config `sidekick setup --json` repeated selected recommendation models because the same value appeared in `runnerDiscovery[*].models` and `recommendedConfig.agents.*.model`.
+- Smoke finding: loaded-config setup JSON also duplicated the configured model because `configuredAgents[*].model` was copied into `configuredAgents[*].configuredModels`.
+- Smoke finding: MCP/non-JSON setup prompt was the noisiest path because it embedded full discovery JSON plus a full starter config JSON.
+- Replaced `recommendedConfig` with `recommendedConfigTemplate`; recommended agents now use `modelRef` such as `runnerDiscovery.antigravity.models[0]` when the model already exists in discovery.
+- Changed `configuredModels` to report only explicit `models` allowlists from config, not a duplicate copy of `model`.
+- Trimmed Claude/Gemini `modelDiscoveryDescription` strings so aliases are not repeated in both `models` and explanatory text.
+- Post-fix smoke:
+  - `Gemini 3.5 Flash (Medium)` now appears once in missing-config setup prompt and once in setup JSON.
+  - `opencode/deepseek-v4-flash-free` now appears once in missing-config setup prompt and once in setup JSON.
+  - Recommendation blocks no longer contain `"model": "Gemini 3.5 Flash (Medium)"`; they use `"modelRef": "runnerDiscovery.antigravity.models[0]"`.
+- Verification passed:
+  - setup smoke with missing config, non-JSON prompt, and loaded config
+  - `npm run lint`
+  - `npm test` (16 files / 132 tests)
+  - `npm run test:sidekick:e2e` (`SIDEKICK_COMMAND_E2E_OK`)
+  - `npm run test:mcp:e2e` (`SIDEKICK_E2E_OK`)
+  - `npm run copy:ensemble-sidekick`
+  - `git diff --check`
+
 ## Antigravity CLI Runner Support
 
 - [x] Read relevant handoff notes and current runner/config structure.

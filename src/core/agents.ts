@@ -37,7 +37,7 @@ export async function listSidekickAgents(
       effort: agentConfig.effort,
       extraArgs: agentConfig.extraArgs,
       description: agentConfig.description,
-      configuredModels: uniqueStrings([...(agentConfig.models ?? []), agentConfig.model]),
+      configuredModels: uniqueStrings(agentConfig.models ?? []),
       models,
     };
   }));

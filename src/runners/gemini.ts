@@ -48,7 +48,7 @@ export class GeminiRunner extends BaseRunner {
   readonly name = 'gemini';
   readonly fallbackModels = ['auto', 'pro', 'flash', 'flash-lite'];
   readonly fallbackRecommendationModels = ['auto'];
-  readonly modelDiscoveryDescription = 'Gemini CLI aliases only (`auto`, `pro`, `flash`, `flash-lite`); Gemini CLI has no headless model-list command';
+  readonly modelDiscoveryDescription = 'Built-in legacy Gemini CLI aliases; Gemini CLI has no headless model-list command';
   readonly worktreeSupport = 'native';
 
   recommendedAgents(models: string[]): Record<string, unknown> {

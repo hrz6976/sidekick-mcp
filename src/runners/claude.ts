@@ -51,7 +51,7 @@ function claudePermissionMode(mode: SidekickMode): string {
 export class ClaudeRunner extends BaseRunner {
   readonly name = 'claude';
   readonly fallbackModels = ['sonnet', 'opus', 'haiku'];
-  readonly modelDiscoveryDescription = 'Claude Code aliases only (`sonnet`, `opus`, `haiku`) plus any full model name the user chooses; Claude CLI has no headless model-list command';
+  readonly modelDiscoveryDescription = 'Built-in Claude Code aliases plus any full model name the user chooses; Claude CLI has no headless model-list command';
   readonly worktreeSupport = 'native';
 
   recommendedAgents(models: string[]): Record<string, unknown> {

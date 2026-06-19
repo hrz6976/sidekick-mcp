@@ -38,7 +38,7 @@ export interface SidekickSetupState {
   };
   configuredAgents: ConfiguredAgentSummary[];
   runnerDiscovery: RunnerDiscovery[];
-  recommendedConfig: unknown;
+  recommendedConfigTemplate: unknown;
 }
 
 function defaultAgentConfig(runner: AgentConfig['runner'], enabled: boolean): AgentConfig {
@@ -80,6 +80,53 @@ export function buildRecommendedConfig(discovery: Array<{
   };
 }
 
+function modelRefFor(
+  runner: AgentConfig['runner'],
+  model: string,
+  discovery: Array<{ runner: AgentConfig['runner']; models: string[] }>,
+): string | undefined {
+  const runnerDiscovery = discovery.find((entry) => entry.runner === runner);
+  const index = runnerDiscovery?.models.indexOf(model) ?? -1;
+  return index >= 0 ? `runnerDiscovery.${runner}.models[${index}]` : undefined;
+}
+
+export function buildRecommendedConfigTemplate(discovery: Array<{
+  runner: AgentConfig['runner'];
+  installed: boolean;
+  models: string[];
+}>): unknown {
+  const config = buildRecommendedConfig(discovery);
+  if (!config || typeof config !== 'object') {
+    return config;
+  }
+
+  const record = config as Record<string, unknown>;
+  const agents = record.agents;
+  if (!agents || typeof agents !== 'object') {
+    return config;
+  }
+
+  return {
+    ...record,
+    agents: Object.fromEntries(Object.entries(agents as Record<string, unknown>).map(([agent, rawConfig]) => {
+      if (!rawConfig || typeof rawConfig !== 'object') {
+        return [agent, rawConfig];
+      }
+      const agentRecord = { ...(rawConfig as Record<string, unknown>) };
+      const runner = agentRecord.runner;
+      const model = agentRecord.model;
+      if (typeof runner === 'string' && typeof model === 'string') {
+        const ref = modelRefFor(runner as AgentConfig['runner'], model, discovery);
+        if (ref) {
+          delete agentRecord.model;
+          agentRecord.modelRef = ref;
+        }
+      }
+      return [agent, agentRecord];
+    })),
+  };
+}
+
 export async function getSetupState(
   config: SidekickConfig,
   availability: CliAvailability,
@@ -113,7 +160,7 @@ export async function getSetupState(
         effort: agentConfig.effort,
         extraArgs: agentConfig.extraArgs,
         description: agentConfig.description,
-        configuredModels: uniqueStrings([...(agentConfig.models ?? []), agentConfig.model]),
+        configuredModels: uniqueStrings(agentConfig.models ?? []),
       }))
     : [];
 
@@ -129,7 +176,7 @@ export async function getSetupState(
     defaults: config.userConfig?.defaults,
     configuredAgents,
     runnerDiscovery,
-    recommendedConfig: buildRecommendedConfig(runnerDiscovery),
+    recommendedConfigTemplate: buildRecommendedConfigTemplate(runnerDiscovery),
   };
 }
 
@@ -172,8 +219,8 @@ export function formatSetupPrompt(state: SidekickSetupState): string {
     '17. Create or update the Sidekick home directory and config file:',
     `   mkdir -p ${state.sidekickHome}`,
     `   write JSON to ${state.configPath}`,
-    '18. Use this recommended starter config as a base only after the user chooses a configuration direction:',
+    '18. Use this recommended starter config template as a base only after the user chooses a configuration direction. Replace any `modelRef` with the referenced model from discovery before writing config.',
     '',
-    jsonText(state.recommendedConfig),
+    jsonText(state.recommendedConfigTemplate),
   ].join('\n');
 }
