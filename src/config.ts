@@ -4,8 +4,15 @@ import path from 'node:path';
 
 export type SidekickLogLevel = 'error' | 'info' | 'debug';
 export type SidekickStderrLogLevel = SidekickLogLevel | 'silent';
-export const RUNNER_NAMES = ['claude', 'gemini', 'codex', 'opencode'] as const;
+export const RUNNER_NAMES = ['claude', 'gemini', 'antigravity', 'codex', 'opencode'] as const;
 export type RunnerName = typeof RUNNER_NAMES[number];
+const DEFAULT_RUNNER_COMMANDS: Record<RunnerName, string> = {
+  claude: 'claude',
+  gemini: 'gemini',
+  antigravity: 'agy',
+  codex: 'codex',
+  opencode: 'opencode',
+};
 export type SidekickMode = 'read-only' | 'edit' | 'full-access';
 export type WorktreeMode = 'auto' | 'off';
 
@@ -111,7 +118,7 @@ function parseAgentConfig(alias: string, raw: unknown): AgentConfig {
       : undefined;
   if (!runner) {
     throw new Error(
-      `Sidekick config field "agents.${alias}.runner" must be one of claude, gemini, codex, opencode.`,
+      `Sidekick config field "agents.${alias}.runner" must be one of claude, gemini, antigravity, codex, opencode.`,
     );
   }
 
@@ -120,7 +127,7 @@ function parseAgentConfig(alias: string, raw: unknown): AgentConfig {
     enabled: record.enabled !== false,
     command: typeof record.command === 'string' && record.command.trim()
       ? record.command.trim()
-      : runner,
+      : DEFAULT_RUNNER_COMMANDS[runner],
     model: typeof record.model === 'string' && record.model.trim()
       ? record.model.trim()
       : undefined,

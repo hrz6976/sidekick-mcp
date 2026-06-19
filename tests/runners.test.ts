@@ -93,6 +93,51 @@ describe('runners', () => {
     expect(args).not.toContain('yolo');
   });
 
+  it('builds Antigravity print commands with sandbox and permission modes', () => {
+    const runner = getRunner('antigravity');
+    const readOnlyArgs = runner.buildArgs(request({
+      agent: 'antigravity',
+      mode: 'read-only',
+      agentConfig: { ...agentConfig, runner: 'antigravity' },
+    }));
+
+    expect(readOnlyArgs).toEqual(expect.arrayContaining([
+      '--sandbox',
+      '--model',
+      'model-name',
+      '--print',
+      'do work',
+    ]));
+    expect(readOnlyArgs).not.toContain('--dangerously-skip-permissions');
+
+    const fullAccessArgs = runner.buildArgs(request({
+      agent: 'antigravity',
+      mode: 'full-access',
+      agentConfig: { ...agentConfig, runner: 'antigravity' },
+    }));
+
+    expect(fullAccessArgs).toEqual(expect.arrayContaining([
+      '--dangerously-skip-permissions',
+      '--model',
+      'model-name',
+      '--print',
+      'do work',
+    ]));
+    expect(fullAccessArgs).not.toContain('--sandbox');
+
+    const explicitPermissionArgs = runner.buildArgs(request({
+      agent: 'antigravity',
+      mode: 'full-access',
+      agentConfig: {
+        ...agentConfig,
+        runner: 'antigravity',
+        extraArgs: ['--sandbox'],
+      },
+    }));
+    expect(explicitPermissionArgs).toContain('--sandbox');
+    expect(explicitPermissionArgs).not.toContain('--dangerously-skip-permissions');
+  });
+
   it('builds Codex exec commands with json and cd', () => {
     const runner = getRunner('codex');
     const args = runner.buildArgs(request());
@@ -165,6 +210,14 @@ describe('runners', () => {
     expect(geminiArgs).not.toContain('--effort');
     expect(geminiArgs).not.toContain('--variant');
     expect(geminiArgs).not.toContain('--config');
+
+    const antigravityArgs = getRunner('antigravity').buildArgs(request({
+      agent: 'antigravity',
+      agentConfig: { ...agentConfig, runner: 'antigravity', effort: 'high' },
+    }));
+    expect(antigravityArgs).not.toContain('--effort');
+    expect(antigravityArgs).not.toContain('--variant');
+    expect(antigravityArgs).not.toContain('--config');
   });
 
   it('does not duplicate reasoning flags already provided through extraArgs', () => {
@@ -255,6 +308,34 @@ describe('runners', () => {
     );
   });
 
+  it('lists Antigravity models from the local CLI', async () => {
+    vi.mocked(executeCommand).mockResolvedValue([
+      'Available models',
+      'Gemini 3.5 Flash (Medium)',
+      'Gemini 3.1 Pro (High)',
+      '* Claude Sonnet 4.6 (Thinking)',
+      'Gemini 3.5 Flash (Medium)',
+    ].join('\n'));
+
+    const models = await getRunner('antigravity').listModels({
+      runner: 'antigravity',
+      enabled: true,
+      command: 'agy',
+      extraArgs: [],
+    });
+
+    expect(models).toEqual([
+      'Gemini 3.5 Flash (Medium)',
+      'Gemini 3.1 Pro (High)',
+      'Claude Sonnet 4.6 (Thinking)',
+    ]);
+    expect(executeCommand).toHaveBeenCalledWith(
+      'agy',
+      ['models'],
+      expect.objectContaining({ timeoutMs: 30_000 }),
+    );
+  });
+
   it('falls back to built-in Codex hints when local catalog parsing fails', async () => {
     vi.mocked(executeCommand).mockResolvedValue('not json');
 
@@ -292,12 +373,13 @@ describe('runners', () => {
     expect(adapters.map((adapter) => adapter.name)).toEqual([
       'claude',
       'gemini',
+      'antigravity',
       'codex',
       'opencode',
     ]);
     for (const adapter of adapters) {
       expect(adapter).toBeInstanceOf(BaseRunner);
-      expect(adapter.defaultCommand).toBe(adapter.name);
+      expect(adapter.defaultCommand).toBe(adapter.name === 'antigravity' ? 'agy' : adapter.name);
       expect(adapter.modelDiscoveryDescription.length).toBeGreaterThan(0);
       expect(['native', 'managed']).toContain(adapter.worktreeSupport);
       expect(adapter.buildArgs(request({
@@ -310,11 +392,15 @@ describe('runners', () => {
     expect(() => getRunner('gemini').validateEffort('high')).toThrow(
       'Runner "gemini" does not support effort overrides.',
     );
+    expect(() => getRunner('antigravity').validateEffort('high')).toThrow(
+      'Runner "antigravity" does not support effort overrides.',
+    );
     expect(() => getRunner('codex').validateEffort('extreme')).toThrow(
       'Runner "codex" effort must be one of: minimal, low, medium, high.',
     );
     expect(getRunner('claude').worktreeSupport).toBe('native');
     expect(getRunner('gemini').worktreeSupport).toBe('native');
+    expect(getRunner('antigravity').worktreeSupport).toBe('managed');
     expect(getRunner('codex').worktreeSupport).toBe('managed');
     expect(getRunner('opencode').worktreeSupport).toBe('managed');
   });
@@ -326,6 +412,14 @@ describe('runners', () => {
         model: 'auto',
         extraArgs: [],
         description: 'Ask Gemini for broad reasoning and implementation review.',
+      },
+    });
+    expect(getRunner('antigravity').recommendedAgents(['Gemini 3.1 Pro (High)'])).toEqual({
+      antigravity: {
+        runner: 'antigravity',
+        model: 'Gemini 3.1 Pro (High)',
+        extraArgs: [],
+        description: 'Ask Google Antigravity CLI for coding-agent help.',
       },
     });
     expect(getRunner('opencode').recommendedAgents([
@@ -351,7 +445,7 @@ describe('runners', () => {
   it('keeps shared output and progress modules generic', () => {
     const outputSource = readFileSync(new URL('../src/runners/output.ts', import.meta.url), 'utf8');
     const progressSource = readFileSync(new URL('../src/runners/progress.ts', import.meta.url), 'utf8');
-    const runnerNames = /\b(claude|gemini|codex|opencode|Claude|Gemini|Codex|OpenCode|RunnerName)\b/;
+    const runnerNames = /\b(claude|gemini|antigravity|codex|opencode|Claude|Gemini|Antigravity|Codex|OpenCode|RunnerName)\b/;
 
     expect(outputSource).not.toMatch(runnerNames);
     expect(progressSource).not.toMatch(runnerNames);

@@ -15,7 +15,7 @@ describe('source boundaries', () => {
     const worktreeSource = source('../src/worktrees/index.ts');
 
     expect(worktreeSource).toContain("request.worktreeSupport === 'native'");
-    expect(worktreeSource).not.toMatch(/\b(claude|gemini|codex|opencode)\b/);
+    expect(worktreeSource).not.toMatch(/\b(claude|gemini|antigravity|codex|opencode)\b/);
   });
 
   it('keeps ask task execution lifecycle in the task coordinator', () => {
@@ -52,6 +52,7 @@ describe('source boundaries', () => {
       source('../src/runners/claude.ts'),
       source('../src/runners/codex.ts'),
       source('../src/runners/gemini.ts'),
+      source('../src/runners/antigravity.ts'),
       source('../src/runners/opencode.ts'),
     ].join('\n');
     const combined = [executionSource, coreSource, cliSource, trajectorySource].join('\n');

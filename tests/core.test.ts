@@ -64,6 +64,7 @@ describe('Sidekick core APIs', () => {
     const state = await getSetupState(config, {
       claude: false,
       gemini: false,
+      antigravity: false,
       codex: true,
       opencode: false,
     });
@@ -79,6 +80,7 @@ describe('Sidekick core APIs', () => {
     expect(state.runnerDiscovery.map((runner) => runner.runner)).toEqual([
       'claude',
       'gemini',
+      'antigravity',
       'codex',
       'opencode',
     ]);
@@ -91,6 +93,7 @@ describe('Sidekick core APIs', () => {
     const result = await listSidekickAgents(config, {
       claude: false,
       gemini: false,
+      antigravity: false,
       codex: true,
       opencode: false,
     }) as { agents: Array<{ agent: string; models: string[] }> };

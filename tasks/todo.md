@@ -1,5 +1,39 @@
 # Sidekick MCP Rewrite Todo
 
+## Antigravity CLI Runner Support
+
+- [x] Read relevant handoff notes and current runner/config structure.
+- [x] Verify current Antigravity CLI command surface from official Google docs/repo and downloaded `--help`.
+- [x] Add an `antigravity` runner for the new `agy` CLI while keeping legacy `gemini` intact.
+- [x] Update config/setup/list guidance so users can choose `antigravity` and the default command is `agy`.
+- [x] Add or update regression tests for args, model discovery, config parsing, setup recommendations, and E2E fake execution.
+- [x] Run focused tests plus full `npm test` and `npm run lint`.
+- [x] Add review/results and final handoff note.
+
+### Antigravity CLI Runner Support Review / Results
+
+- Added first-class `runner: "antigravity"` support for Google Antigravity CLI, with default command `agy`.
+- Kept legacy `runner: "gemini"` intact for existing configs.
+- Antigravity runs headless through `agy --print <prompt>` with optional `--model`.
+- Sidekick maps `mode: "read-only"` to `--sandbox` and `mode: "full-access"` to `--dangerously-skip-permissions`, unless the user already supplied one of those permission flags in `extraArgs`.
+- Antigravity uses Sidekick-managed git worktrees because current `agy --help` does not expose a native worktree flag.
+- Antigravity model discovery uses `agy models`; configured `models` still override discovery through the existing base runner behavior.
+- Follow-up real `agy models` testing showed Antigravity emits display names with spaces, so model discovery now preserves full display names such as `Gemini 3.5 Flash (Medium)` instead of truncating to the first word.
+- Real Antigravity smoke passed after login:
+  - `node tests/real-sidekick-command-smoke.mjs antigravity` (`SIDEKICK_REAL_COMMAND_SMOKE_OK agent=antigravity model=`)
+  - `node tests/real-mcp-smoke.mjs antigravity` (`SIDEKICK_REAL_MODEL_SMOKE_OK agent=antigravity model=`)
+- Explicit Antigravity model-name smoke also passed with `model: "Gemini 3.5 Flash (Low)"` from `agy models` and `extraArgs: ["--print-timeout", "10s"]`; Sidekick returned `SIDEKICK_AGY_REAL_MODEL_NAME_OK`.
+- Updated `setup`, `list_agents` guidance, README, package metadata, source-boundary checks, config parsing, CLI detection, runner tests, and standalone command E2E.
+- Rebuilt and copied the standalone bundle to `~/.agents/skills/ensemble/bin/sidekick.mjs`.
+- Verification passed:
+  - `npm test -- tests/runners.test.ts`
+  - `npm run lint`
+  - `npm test` (16 files / 132 tests)
+  - `npm run test:sidekick:e2e` (`SIDEKICK_COMMAND_E2E_OK`)
+  - `npm run test:mcp:e2e` (`SIDEKICK_E2E_OK`)
+  - `npm run copy:ensemble-sidekick`
+  - `git diff --check`
+
 ## v0.1.3 CLI Entrypoint / Progress Release
 
 - [x] Pull latest `origin/main` and keep local entrypoint/progress changes.

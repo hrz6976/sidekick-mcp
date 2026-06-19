@@ -42,6 +42,10 @@ if (prompt.includes('SIDEKICK_COMMAND_FAKE_AGENT_FAIL')) {
   console.error('fake agent failed intentionally');
   process.exit(1);
 }
+if (args.includes('--print')) {
+  console.log('fake antigravity answer');
+  process.exit(0);
+}
 if (args.includes('exec')) {
   console.log(JSON.stringify({ type: 'item.completed', item: { id: 'item_1', type: 'agent_message', text: 'fake codex cli answer' } }));
 }
@@ -125,6 +129,14 @@ try {
         extraArgs: [],
         description: 'Fake Codex for sidekick CLI e2e.',
       },
+      antigravity: {
+        runner: 'antigravity',
+        enabled: true,
+        command: fakeCommand,
+        model: 'fake-antigravity',
+        extraArgs: [],
+        description: 'Fake Antigravity for sidekick CLI e2e.',
+      },
     },
     defaults: { mode: 'edit', worktree: 'auto' },
   }, null, 2), 'utf8');
@@ -133,9 +145,9 @@ try {
   const env = { SIDEKICK_HOME: home };
 
   const listed = JSON.parse(cli(['list', '--json'], env, repo));
-  assert.equal(listed.agents.length, 1);
-  assert.equal(listed.agents[0].agent, 'codex');
-  assert.equal(listed.agents[0].runner, 'codex');
+  assert.equal(listed.agents.length, 2);
+  assert.equal(listed.agents.find((agent) => agent.agent === 'codex').runner, 'codex');
+  assert.equal(listed.agents.find((agent) => agent.agent === 'antigravity').runner, 'antigravity');
 
   const sidekickLink = path.join(root, 'sidekick-link.mjs');
   symlinkSync(path.join(repoRoot, 'dist', 'sidekick.mjs'), sidekickLink);
@@ -147,8 +159,31 @@ try {
       SIDEKICK_STDERR_LOG_LEVEL: 'silent',
     },
   }));
-  assert.equal(listedViaSymlink.agents.length, 1);
-  assert.equal(listedViaSymlink.agents[0].agent, 'codex');
+  assert.equal(listedViaSymlink.agents.length, 2);
+  assert.equal(listedViaSymlink.agents.find((agent) => agent.agent === 'codex').runner, 'codex');
+
+  const antigravityRun = sidekick([
+    'run',
+    '--agent',
+    'antigravity',
+    '--prompt-file',
+    promptFile,
+    '--cwd',
+    repo,
+    '--mode',
+    'read-only',
+    '--worktree',
+    'off',
+    '--json',
+    '--no-progress',
+  ], env, repo);
+  const antigravityResult = JSON.parse(antigravityRun.stdout);
+  assert.equal(antigravityResult.status, 'completed');
+  assert.equal(antigravityResult.agent, 'antigravity');
+  assert.equal(antigravityResult.runner, 'antigravity');
+  assert.equal(antigravityResult.answer, 'fake antigravity answer');
+  assert.equal(antigravityResult.worktree.kind, 'none');
+  assert.match(readFileSync(antigravityResult.logs.stdout, 'utf8'), /fake antigravity answer/);
 
   const runResult = sidekick([
     'run',

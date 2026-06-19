@@ -50,8 +50,8 @@ export async function listSidekickAgents(
       'Use `effort` in config for default effort controls, or pass `effort` at run time to override it for one run.',
       'Use mode "read-only" for analysis. Read-only calls default to worktree "off".',
       'Use mode "edit" or "full-access" with worktree "auto" for implementation to avoid concurrent edits.',
-      'Codex models come from local `codex debug models --bundled`; OpenCode models come from local `opencode models` without `--refresh`.',
-      'Gemini and Claude models are CLI aliases, not account-entitled model lists.',
+      'Codex models come from local `codex debug models --bundled`; OpenCode models come from local `opencode models` without `--refresh`; Antigravity models come from local `agy models`.',
+      'Legacy Gemini and Claude models are CLI aliases, not account-entitled model lists.',
     ],
   };
 }

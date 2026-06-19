@@ -59,9 +59,10 @@ describe('initTools', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false,
-      codex: true,
       claude: false,
+      gemini: false,
+      antigravity: false,
+      codex: true,
       opencode: false,
     });
     savedRegistry = [...toolRegistry];
@@ -93,9 +94,10 @@ describe('initTools', () => {
 
   it('registers the configured Sidekick tool surface regardless of CLI availability', async () => {
     vi.mocked(detectAvailableClis).mockResolvedValue({
-      gemini: false,
-      codex: false,
       claude: false,
+      gemini: false,
+      antigravity: false,
+      codex: false,
       opencode: false,
     });
 
@@ -105,9 +107,10 @@ describe('initTools', () => {
     });
 
     expect(availability).toEqual({
-      gemini: false,
-      codex: false,
       claude: false,
+      gemini: false,
+      antigravity: false,
+      codex: false,
       opencode: false,
     });
     expect(toolRegistry.map((tool) => tool.name)).toEqual([

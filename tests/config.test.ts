@@ -111,6 +111,31 @@ describe('config', () => {
     }
   });
 
+  it('defaults the Antigravity runner alias to agy', () => {
+    const home = mkdtempSync(path.join(os.tmpdir(), 'sidekick-config-antigravity-'));
+    const configPath = path.join(home, 'config.json');
+    writeFileSync(configPath, JSON.stringify({
+      agents: {
+        antigravity: { runner: 'antigravity' },
+      },
+      defaults: { mode: 'read-only', worktree: 'auto' },
+    }), 'utf8');
+
+    try {
+      const config = loadConfig({
+        SIDEKICK_HOME: home,
+        SIDEKICK_CONFIG_PATH: configPath,
+      });
+
+      expect(config.setupRequired).toBe(false);
+      expect(config.userConfig?.agents.antigravity?.runner).toBe('antigravity');
+      expect(config.userConfig?.agents.antigravity?.command).toBe('agy');
+      expect(config.userConfig?.agents.antigravity?.enabled).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   it('parses Sidekick logging environment overrides', () => {
     const config = loadConfig({
       SIDEKICK_LOG_LEVEL: 'info',

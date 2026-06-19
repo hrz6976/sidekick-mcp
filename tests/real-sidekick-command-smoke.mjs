@@ -7,7 +7,7 @@ import path from 'node:path';
 const repoRoot = process.cwd();
 const agent = process.argv[2] ?? 'claude';
 const model = process.argv[3] ?? (agent === 'claude' ? 'sonnet' : '');
-const command = process.argv[4] ?? agent;
+const command = process.argv[4] ?? (agent === 'antigravity' ? 'agy' : agent);
 const marker = 'SIDEKICK_REAL_COMMAND_SMOKE_OK';
 
 function run(commandName, args, options = {}) {

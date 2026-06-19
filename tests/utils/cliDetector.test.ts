@@ -76,7 +76,13 @@ describe('cliDetector', () => {
       process.env.QA_NO_CLIS = 'true';
 
       const result = await detectAvailableClis(getRunnerAdapters());
-      expect(result).toEqual({ gemini: false, codex: false, claude: false, opencode: false });
+      expect(result).toEqual({
+        claude: false,
+        gemini: false,
+        antigravity: false,
+        codex: false,
+        opencode: false,
+      });
       // spawn should not be called at all
       expect(spawn).not.toHaveBeenCalled();
     });
@@ -93,19 +99,27 @@ describe('cliDetector', () => {
       const promise = detectAvailableClis(getRunnerAdapters());
 
       // Wait for all spawns to be called
-      await vi.waitFor(() => expect(mocks.length).toBe(4));
+      await vi.waitFor(() => expect(mocks.length).toBe(5));
 
-      // claude found, gemini not found, codex found, opencode not found
+      // claude found, gemini not found, antigravity found, codex found, opencode not found
       mocks[0].emitClose(0); // claude
       mocks[1].emitClose(1); // gemini
-      mocks[2].emitClose(0); // codex
-      mocks[3].emitClose(1); // opencode
+      mocks[2].emitClose(0); // antigravity
+      mocks[3].emitClose(0); // codex
+      mocks[4].emitClose(1); // opencode
 
       const result = await promise;
-      expect(result).toEqual({ claude: true, gemini: false, codex: true, opencode: false });
+      expect(result).toEqual({
+        claude: true,
+        gemini: false,
+        antigravity: true,
+        codex: true,
+        opencode: false,
+      });
       expect(vi.mocked(spawn).mock.calls.map((call) => call[1]?.[0])).toEqual([
         'claude',
         'gemini',
+        'agy',
         'codex',
         'opencode',
       ]);

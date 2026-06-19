@@ -1,4 +1,5 @@
 import type { RunnerName } from '../config.js';
+import { antigravityRunner } from './antigravity.js';
 import { claudeRunner } from './claude.js';
 import { codexRunner } from './codex.js';
 import { geminiRunner } from './gemini.js';
@@ -8,6 +9,7 @@ import type { AgentRunner } from './types.js';
 const BUILT_IN_RUNNERS = [
   claudeRunner,
   geminiRunner,
+  antigravityRunner,
   codexRunner,
   openCodeRunner,
 ];

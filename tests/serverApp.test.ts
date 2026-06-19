@@ -73,9 +73,10 @@ async function createConnectedPair(
   config = createConfig(),
   options?: CreateServerAppOptions,
   availability: CliAvailability = {
-    gemini: false,
-    codex: true,
     claude: true,
+    gemini: false,
+    antigravity: false,
+    codex: true,
     opencode: false,
   },
 ) {
@@ -187,9 +188,10 @@ describe('serverApp', () => {
       createConfig(true),
       undefined,
       {
-        gemini: false,
-        codex: false,
         claude: false,
+        gemini: false,
+        antigravity: false,
+        codex: false,
         opencode: true,
       },
     ));
@@ -212,9 +214,10 @@ describe('serverApp', () => {
       createConfig(true),
       undefined,
       {
-        gemini: false,
-        codex: false,
         claude: false,
+        gemini: false,
+        antigravity: false,
+        codex: false,
         opencode: true,
       },
     ));
